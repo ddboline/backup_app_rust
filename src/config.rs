@@ -1,33 +1,28 @@
+use anyhow::Error;
+use serde::{Deserialize, Serialize};
 use stack_string::StackString;
+use std::collections::HashMap;
+use std::convert::TryFrom;
 use std::path::PathBuf;
 use url::Url;
-use serde::{Serialize, Deserialize};
-use anyhow::Error;
-use std::convert::TryFrom;
-use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct Config {
-    postgres_entries: HashMap<StackString, PostgresEntry>,
-    local_entries: HashMap<StackString, LocalEntry>,
+    stuff: Option<StackString>,
+    entries: HashMap<StackString, Entry>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct PostgresEntry {
-    database_url: UrlWrapper,
-    table_name: StackString,
-    destination: UrlWrapper,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct LocalEntry {
-        require_sudo: bool,
-        destination: UrlWrapper,
-        backup_paths: Vec<PathBuf>,
+#[derive(Serialize, Deserialize, Debug, Default)]
+pub struct Entry {
+    require_sudo: Option<bool>,
+    database_url: Option<UrlWrapper>,
+    destination: Option<UrlWrapper>,
+    backup_paths: Option<Vec<PathBuf>>,
+    tables: Option<Vec<StackString>>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(into="String", try_from="&str")]
+#[serde(into = "String", try_from = "&str")]
 pub struct UrlWrapper(Url);
 
 impl From<UrlWrapper> for String {
@@ -47,25 +42,53 @@ impl TryFrom<&str> for UrlWrapper {
 #[cfg(test)]
 mod tests {
     use anyhow::Error;
-    use toml::to_string_pretty;
-    use std::convert::TryInto;
     use maplit::hashmap;
+    use std::convert::TryInto;
+    use toml::to_string_pretty;
 
-    use crate::config::{Config, PostgresEntry, UrlWrapper, LocalEntry};
+    use crate::config::{Config, Entry, UrlWrapper};
 
     #[test]
     fn test_config() -> Result<(), Error> {
-        let database_url: UrlWrapper = "postgresql://ddboline:Gdf3m895Nip5pydr@localhost:5432/aws_app_cache".try_into()?;
-        let table_name = "instance_family".into();
+        let database_url: UrlWrapper =
+            "postgresql://user:password@localhost:5432/aws_app_cache".try_into()?;
+        let tables = vec!["instance_family".into(), "instance_list".into()];
         let destination = "s3://aws-app-rust-db-backup".try_into()?;
-        let entry = PostgresEntry {database_url, table_name, destination};
-        let postgres_entries = hashmap!{"aws_app_rust".into() => entry};
-        
+        let aws_entry = Entry {
+            database_url: Some(database_url),
+            tables: Some(tables),
+            destination: Some(destination),
+            ..Entry::default()
+        };
+
+        let database_url: UrlWrapper =
+            "postgresql://user:password@localhost:5432/calendar_app_cache"
+                .try_into()?;
+        let tables = vec!["calendar_cache".into(), "calendar_list".into()];
+        let destination = "s3://calendar-app-rust-db-backup".try_into()?;
+        let calendar_entry = Entry {
+            database_url: Some(database_url),
+            tables: Some(tables),
+            destination: Some(destination),
+            ..Entry::default()
+        };
+
         let backup_paths = vec!["/home/ddboline/Dropbox".into()];
         let destination = "file:///home/ddboline/temp.tar.gz".try_into()?;
-        let entry = LocalEntry {require_sudo: false, destination, backup_paths};
-        let local_entries = hashmap!{"Dropbox".into() => entry};
-        let config = Config {postgres_entries, local_entries};
+        let local_entry = Entry {
+            destination: Some(destination),
+            backup_paths: Some(backup_paths),
+            ..Entry::default()
+        };
+        let entries = hashmap! {
+            "Dropbox".into() => local_entry,
+            "aws_app_rust".into() => aws_entry,
+            "calendar_app_rust".into() => calendar_entry,
+        };
+        let config = Config {
+            entries,
+            ..Config::default()
+        };
         println!("{:?}", config);
         println!("{}", to_string_pretty(&config)?);
         assert!(false);

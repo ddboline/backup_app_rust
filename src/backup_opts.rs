@@ -469,11 +469,11 @@ async fn input_from_gz_file(
     mut writer: impl AsyncWriteExt + Unpin,
     input_path: impl AsRef<Path>,
 ) -> Result<(), Error> {
-    let (s, mut r) = channel(1);
+    let (send, mut recv) = channel(1);
     let input_path = input_path.as_ref().to_path_buf();
-    let gz_task = spawn_blocking(move || read_from_gzip(&input_path, s));
+    let gz_task = spawn_blocking(move || read_from_gzip(&input_path, send));
 
-    while let Some(buf) = r.recv().await {
+    while let Some(buf) = recv.recv().await {
         writer.write_all(&buf).await?;
     }
 
@@ -481,7 +481,7 @@ async fn input_from_gz_file(
     Ok(())
 }
 
-fn read_from_gzip(input_path: &Path, mut s: Sender<Vec<u8>>) -> Result<(), Error> {
+fn read_from_gzip(input_path: &Path, mut send: Sender<Vec<u8>>) -> Result<(), Error> {
     use std::{
         fs::File,
         io::{ErrorKind, Read},
@@ -510,7 +510,7 @@ fn read_from_gzip(input_path: &Path, mut s: Sender<Vec<u8>>) -> Result<(), Error
         buf.truncate(offset);
         let mut buf_opt = Some(buf);
         while let Some(buf) = buf_opt.take() {
-            match s.try_send(buf) {
+            match send.try_send(buf) {
                 Ok(_) => {
                     break;
                 }
@@ -533,9 +533,9 @@ async fn output_to_gz_file(
     mut reader: impl AsyncReadExt + Unpin,
     output_path: impl AsRef<Path>,
 ) -> Result<(), Error> {
-    let (mut s, r) = channel(1);
+    let (mut send, recv) = channel(1);
     let output_path = output_path.as_ref().to_path_buf();
-    let gz_task = spawn_blocking(move || write_to_gzip(&output_path, r));
+    let gz_task = spawn_blocking(move || write_to_gzip(&output_path, recv));
 
     loop {
         let mut buf = Vec::with_capacity(4096);
@@ -543,16 +543,16 @@ async fn output_to_gz_file(
         if bytes == 0 {
             break;
         }
-        s.send(buf).await?;
+        send.send(buf).await?;
     }
-    drop(s);
+    drop(send);
 
     gz_task.await??;
 
     Ok(())
 }
 
-fn write_to_gzip(output_path: &Path, mut r: Receiver<Vec<u8>>) -> Result<(), Error> {
+fn write_to_gzip(output_path: &Path, mut recv: Receiver<Vec<u8>>) -> Result<(), Error> {
     use std::{fs::File, io::Write, thread::sleep, time::Duration};
 
     let file_name = output_path
@@ -565,7 +565,7 @@ fn write_to_gzip(output_path: &Path, mut r: Receiver<Vec<u8>>) -> Result<(), Err
         .filename(file_name)
         .write(output_file, Compression::default());
     loop {
-        match r.try_recv() {
+        match recv.try_recv() {
             Ok(buf) => {
                 gz.write_all(&buf)?;
             }

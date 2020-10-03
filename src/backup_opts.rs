@@ -495,15 +495,16 @@ fn read_from_gzip(input_path: &Path, mut send: Sender<Vec<u8>>) -> Result<(), Er
         let mut offset = 0;
         loop {
             match gz.read(&mut buf[offset..]) {
-                Ok(0) => {
-                    break;
-                }
                 Ok(n) => {
+                    if n == 0 {
+                        break;
+                    }
                     offset += n;
                 }
-                Err(e) if e.kind() == ErrorKind::Interrupted => {}
                 Err(e) => {
-                    return Err(e.into());
+                    if e.kind() != ErrorKind::Interrupted {
+                        return Err(e.into());
+                    }
                 }
             }
         }

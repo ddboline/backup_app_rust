@@ -1,0 +1,21 @@
+[aws_app_rust]
+database_url = 'postgresql://user:password@localhost:5432/aws_app_cache'
+destination = 's3://aws-app-rust-db-backup'
+tables = [
+    'instance_family',
+    'instance_list',
+]
+sequences = {intrusion_log_id_seq=['intrusion_log', 'id']}
+
+[calendar_app_rust]
+database_url = 'postgresql://user:password@localhost:5432/calendar_app_cache'
+destination = 's3://calendar-app-rust-db-backup'
+tables = [
+    'calendar_cache',
+    'calendar_list',
+]
+
+[Dropbox]
+destination = 'file:///home/ddboline/temp.tar.gz'
+backup_paths = ['/home/ddboline/Dropbox']
+require_sudo = true

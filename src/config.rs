@@ -270,6 +270,7 @@ mod tests {
     use crate::config::{Config, ConfigToml, EntryToml, UrlWrapper};
 
     #[test]
+    #[ignore]
     fn test_config() -> Result<(), Error> {
         let database_url: UrlWrapper =
             "postgresql://user:password@localhost:5432/aws_app_cache".try_into()?;

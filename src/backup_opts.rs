@@ -16,7 +16,12 @@ use tokio::{
     fs::File,
     io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWriteExt, BufReader},
     process::Command,
-    task::{spawn, JoinHandle},
+    sync::mpsc::{
+        channel,
+        error::{TryRecvError, TrySendError},
+        Receiver, Sender,
+    },
+    task::{spawn, spawn_blocking, JoinHandle},
 };
 use url::Url;
 
@@ -464,18 +469,63 @@ async fn input_from_gz_file(
     mut writer: impl AsyncWriteExt + Unpin,
     input_path: impl AsRef<Path>,
 ) -> Result<(), Error> {
-    use std::io::{BufRead, BufReader};
-    let input_file = File::open(&input_path).await?.into_std().await;
-    let gz = GzDecoder::new(input_file);
-    let mut reader = BufReader::new(gz);
+    let (send, mut recv) = channel(1);
+    let input_path = input_path.as_ref().to_path_buf();
+    let gz_task = spawn_blocking(move || read_from_gzip(&input_path, send));
 
-    let mut buf = Vec::new();
+    while let Some(buf) = recv.recv().await {
+        writer.write_all(&buf).await?;
+    }
+
+    gz_task.await??;
+    Ok(())
+}
+
+fn read_from_gzip(input_path: &Path, mut send: Sender<Vec<u8>>) -> Result<(), Error> {
+    use std::{
+        fs::File,
+        io::{ErrorKind, Read},
+    };
+
+    let input_file = File::open(&input_path)?;
+    let mut gz = GzDecoder::new(input_file);
+
     loop {
-        if reader.read_until(b'\n', &mut buf)? == 0 {
+        let mut buf = vec![0u8; 4096];
+        let mut offset = 0;
+        loop {
+            match gz.read(&mut buf[offset..]) {
+                Ok(n) => {
+                    if n == 0 {
+                        break;
+                    }
+                    offset += n;
+                }
+                Err(e) => {
+                    if e.kind() != ErrorKind::Interrupted {
+                        return Err(e.into());
+                    }
+                }
+            }
+        }
+        buf.truncate(offset);
+        let mut buf_opt = Some(buf);
+        while let Some(buf) = buf_opt.take() {
+            match send.try_send(buf) {
+                Ok(_) => {
+                    break;
+                }
+                Err(TrySendError::Full(buf)) => {
+                    buf_opt.replace(buf);
+                }
+                Err(e) => {
+                    return Err(e.into());
+                }
+            }
+        }
+        if offset < 4096 {
             break;
         }
-        writer.write_all(&buf).await?;
-        buf.clear();
     }
     Ok(())
 }
@@ -484,24 +534,48 @@ async fn output_to_gz_file(
     mut reader: impl AsyncReadExt + Unpin,
     output_path: impl AsRef<Path>,
 ) -> Result<(), Error> {
+    let (mut send, recv) = channel(1);
+    let output_path = output_path.as_ref().to_path_buf();
+    let gz_task = spawn_blocking(move || write_to_gzip(&output_path, recv));
+
+    loop {
+        let mut buf = Vec::with_capacity(4096);
+        if reader.read_buf(&mut buf).await? == 0 {
+            break;
+        }
+        send.send(buf).await?;
+    }
+    drop(send);
+
+    gz_task.await??;
+
+    Ok(())
+}
+
+fn write_to_gzip(output_path: &Path, mut recv: Receiver<Vec<u8>>) -> Result<(), Error> {
+    use std::{fs::File, io::Write, thread::sleep, time::Duration};
+
     let file_name = output_path
-        .as_ref()
         .file_name()
         .ok_or_else(|| format_err!("No file name"))?
         .to_string_lossy()
         .into_owned();
-    let output_file = File::create(&output_path).await?.into_std().await;
+    let output_file = File::create(&output_path)?;
     let mut gz = GzBuilder::new()
         .filename(file_name)
         .write(output_file, Compression::default());
-    let mut buf = Vec::with_capacity(4096);
-    while let Ok(bytes) = reader.read_buf(&mut buf).await {
-        use std::io::Write;
-        gz.write_all(&buf)?;
-        if bytes == 0 {
-            break;
+    loop {
+        match recv.try_recv() {
+            Ok(buf) => {
+                gz.write_all(&buf)?;
+            }
+            Err(TryRecvError::Closed) => {
+                break;
+            }
+            Err(TryRecvError::Empty) => {
+                sleep(Duration::from_millis(100));
+            }
         }
-        buf.clear();
     }
     gz.try_finish()?;
     Ok(())

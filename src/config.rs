@@ -6,7 +6,7 @@ use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use stack_string::StackString;
 use std::{
-    collections::HashMap,
+    collections::{hash_map::IntoIter, HashMap},
     convert::{TryFrom, TryInto},
     fmt, fs,
     path::{Path, PathBuf},
@@ -30,8 +30,12 @@ impl Config {
     pub fn iter(&self) -> impl Iterator<Item = (&StackString, &Entry)> {
         self.0.iter()
     }
+}
 
-    pub fn into_iter(self) -> impl Iterator<Item = (StackString, Entry)> {
+impl IntoIterator for Config {
+    type Item = (StackString, Entry);
+    type IntoIter = IntoIter<StackString, Entry>;
+    fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
     }
 }
@@ -172,10 +176,10 @@ impl TryFrom<ConfigToml> for Config {
                                 Ok(p)
                             } else {
                                 let new_p = HOME.join(&p);
-                                if !new_p.exists() {
-                                    Err(format_err!("Path {:?} does not exist", p))
-                                } else {
+                                if new_p.exists() {
                                     Ok(new_p)
+                                } else {
+                                    Err(format_err!("Path {:?} does not exist", p))
                                 }
                             }
                         })

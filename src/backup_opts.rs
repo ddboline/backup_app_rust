@@ -57,6 +57,7 @@ impl BackupOpts {
                 }
             },
             BackupCommand::Backup => {
+                #[allow(clippy::filter_map)]
                 let futures = config
                     .iter()
                     .filter(|(k, _)| match &opts.key {
@@ -77,7 +78,7 @@ impl BackupOpts {
                                 tables,
                                 ..
                             } => {
-                                let futures = tables.into_iter().map(|table| async move {
+                                let futures = tables.iter().map(|table| async move {
                                     backup_table(&database_url, &destination, &table).await?;
                                     Ok(())
                                 });
@@ -109,6 +110,7 @@ impl BackupOpts {
                 results?;
             }
             BackupCommand::Restore => {
+                #[allow(clippy::filter_map)]
                 let futures = config
                     .iter()
                     .filter(|(k, _)| match &opts.key {
@@ -129,7 +131,7 @@ impl BackupOpts {
                                 tables,
                                 sequences,
                             } => {
-                                let futures = tables.into_iter().map(|table| async move {
+                                let futures = tables.iter().map(|table| async move {
                                     restore_table(&database_url, &destination, &table).await?;
                                     Ok(())
                                 });
@@ -175,7 +177,7 @@ async fn run_local_backup(
         destination.to_string(),
     ]);
     let backup_paths: Vec<String> = backup_paths
-        .into_iter()
+        .iter()
         .map(|p| p.to_string_lossy().into_owned())
         .collect();
     args.extend_from_slice(&backup_paths);

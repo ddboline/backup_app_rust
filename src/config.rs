@@ -5,12 +5,12 @@ use itertools::Itertools;
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use stack_string::StackString;
-use std::collections::HashMap;
-use std::convert::TryFrom;
-use std::convert::TryInto;
-use std::fmt;
-use std::fs;
-use std::path::{Path, PathBuf};
+use std::{
+    collections::HashMap,
+    convert::{TryFrom, TryInto},
+    fmt, fs,
+    path::{Path, PathBuf},
+};
 use url::Url;
 
 lazy_static! {
@@ -100,24 +100,28 @@ impl fmt::Display for Entry {
                 backup_paths,
                 command_output,
                 exclude,
-            } => {
-                format!(
-                    "local\n\tsudo: {}\n\tdest: {}\n\tpaths: {}\n{}{}",
-                    require_sudo,
-                    destination.as_str(),
-                    backup_paths.iter().map(|p| p.to_string_lossy()).join(", "),
-                    if command_output.is_empty() {
-                        "".to_string()
-                    } else {
-                        format!("\tcommand: {}\n", command_output.iter().map(|(a, b)| format!("{} {}", a, b)).join(", "))
-                    },
-                    if exclude.is_empty() {
-                        "".to_string()
-                    } else {
-                        format!("\texclude: {}\n", exclude.join(", "))
-                    }
-                )
-            },
+            } => format!(
+                "local\n\tsudo: {}\n\tdest: {}\n\tpaths: {}\n{}{}",
+                require_sudo,
+                destination.as_str(),
+                backup_paths.iter().map(|p| p.to_string_lossy()).join(", "),
+                if command_output.is_empty() {
+                    "".to_string()
+                } else {
+                    format!(
+                        "\tcommand: {}\n",
+                        command_output
+                            .iter()
+                            .map(|(a, b)| format!("{} {}", a, b))
+                            .join(", ")
+                    )
+                },
+                if exclude.is_empty() {
+                    "".to_string()
+                } else {
+                    format!("\texclude: {}\n", exclude.join(", "))
+                }
+            ),
             Self::FullPostgresBackup { destination } => {
                 format!("full_postgres_backup {}", destination.as_str())
             }
@@ -257,9 +261,7 @@ impl TryFrom<&str> for UrlWrapper {
 mod tests {
     use anyhow::Error;
     use maplit::hashmap;
-    use std::convert::TryInto;
-    use std::fs;
-    use std::path::Path;
+    use std::{convert::TryInto, fs, path::Path};
 
     use crate::config::{Config, ConfigToml, EntryToml, UrlWrapper};
 

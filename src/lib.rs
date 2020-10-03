@@ -9,4 +9,33 @@
 
 pub mod backup_opts;
 pub mod config;
-pub mod pgpool;
+pub mod s3_instance;
+
+use anyhow::Error;
+use rand::{
+    distributions::{Distribution, Uniform},
+    thread_rng,
+};
+use std::future::Future;
+use tokio::time::{delay_for, Duration};
+
+pub async fn exponential_retry<T, U, F>(f: T) -> Result<U, Error>
+where
+    T: Fn() -> F,
+    F: Future<Output = Result<U, Error>>,
+{
+    let mut timeout: f64 = 1.0;
+    let range = Uniform::from(0..1000);
+    loop {
+        match f().await {
+            Ok(resp) => return Ok(resp),
+            Err(err) => {
+                delay_for(Duration::from_millis((timeout * 1000.0) as u64)).await;
+                timeout *= 4.0 * f64::from(range.sample(&mut thread_rng())) / 1000.0;
+                if timeout >= 64.0 {
+                    return Err(err);
+                }
+            }
+        }
+    }
+}

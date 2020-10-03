@@ -1,0 +1,9 @@
+FROM rust_stable:latest
+MAINTAINER Daniel Boline
+
+WORKDIR /backup_app_rust
+
+ADD Cargo.toml /backup_app_rust
+ADD src /backup_app_rust/src
+ADD scripts /backup_app_rust/scripts
+ADD Makefile /backup_app_rust

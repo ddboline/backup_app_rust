@@ -25,7 +25,17 @@ itertools = "0.9"
 tar = "0.4"
 flate2 = "1.0"
 tokio = { version="0.2", features=["full"]}
+log = "0.4"
 tokio-postgres = {version = "0.5", features = ["with-chrono-0_4", "with-uuid-0_8"]}
+env_logger = "0.7"
+tempfile = "3.1"
+rand = "0.7"
+futures = "0.3"
+rusoto_core = {version = "0.45", default_features = false, features=["rustls"]}
+rusoto_s3 = {version = "0.45", default_features = false, features=["rustls"]}
+s3-ext = "0.1"
+sts_profile_auth = "0.5"
+parking_lot = "0.11"
 stack-string = { git = "https://github.com/ddboline/stack-string-rs.git", tag="0.1.6", features=["diesel_types"] }
 
 [[bin]]

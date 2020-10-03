@@ -4,5 +4,6 @@ use backup_app_rust::backup_opts::BackupOpts;
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
+    env_logger::init();
     BackupOpts::process_args().await
 }

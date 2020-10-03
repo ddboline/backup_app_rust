@@ -16,7 +16,8 @@ use tokio::{
     fs::File,
     io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWriteExt, BufReader},
     process::Command,
-    task::{spawn, JoinHandle},
+    sync::mpsc::{channel, error::TryRecvError, Receiver, Sender},
+    task::{spawn, spawn_blocking, JoinHandle},
 };
 use url::Url;
 
@@ -464,10 +465,7 @@ async fn input_from_gz_file(
     mut writer: impl AsyncWriteExt + Unpin,
     input_path: impl AsRef<Path>,
 ) -> Result<(), Error> {
-    use std::io::{BufRead, BufReader};
-    let input_file = File::open(&input_path).await?.into_std().await;
-    let gz = GzDecoder::new(input_file);
-    let mut reader = BufReader::new(gz);
+    let (mut s, r) = channel(1);
 
     let mut buf = Vec::new();
     loop {
@@ -480,28 +478,64 @@ async fn input_from_gz_file(
     Ok(())
 }
 
+fn read_from_gzip(input_path: &Path, mut s: Sender<Vec<u8>>) -> Result<(), Error> {
+    use std::io::{BufRead, BufReader};
+    let input_file = File::open(&input_path)?;
+    let gz = GzDecoder::new(input_file);
+    let mut reader = BufReader::new(gz);
+
+    Ok(())
+}
+
 async fn output_to_gz_file(
     mut reader: impl AsyncReadExt + Unpin,
     output_path: impl AsRef<Path>,
 ) -> Result<(), Error> {
+    let (mut s, r) = channel(1);
+    let output_path = output_path.as_ref().to_path_buf();
+    let gz_task = spawn_blocking(move || write_to_gzip(&output_path, r));
+
+    loop {
+        let mut buf = Vec::with_capacity(4096);
+        let bytes = reader.read_buf(&mut buf).await?;
+        if bytes == 0 {
+            break;
+        }
+        s.send(buf).await?;
+    }
+
+    gz_task.await??;
+
+    Ok(())
+}
+
+fn write_to_gzip(output_path: &Path, mut r: Receiver<Vec<u8>>) -> Result<(), Error> {
+    use std::fs::File;
+    use std::io::Write;
+    use std::thread::sleep;
+    use std::time::Duration;
+
     let file_name = output_path
-        .as_ref()
         .file_name()
         .ok_or_else(|| format_err!("No file name"))?
         .to_string_lossy()
         .into_owned();
-    let output_file = File::create(&output_path).await?.into_std().await;
+    let output_file = File::create(&output_path)?;
     let mut gz = GzBuilder::new()
         .filename(file_name)
         .write(output_file, Compression::default());
-    let mut buf = Vec::with_capacity(4096);
-    while let Ok(bytes) = reader.read_buf(&mut buf).await {
-        use std::io::Write;
-        gz.write_all(&buf)?;
-        if bytes == 0 {
-            break;
+    loop {
+        match r.try_recv() {
+            Ok(buf) => {
+                gz.write_all(&buf)?;
+            }
+            Err(TryRecvError::Closed) => {
+                break;
+            }
+            Err(TryRecvError::Empty) => {
+                sleep(Duration::from_millis(100));
+            }
         }
-        buf.clear();
     }
     gz.try_finish()?;
     Ok(())

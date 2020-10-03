@@ -491,7 +491,7 @@ fn read_from_gzip(input_path: &Path, mut send: Sender<Vec<u8>>) -> Result<(), Er
     let mut gz = GzDecoder::new(input_file);
 
     loop {
-        let mut buf = vec![0u8; 4096];
+        let mut buf = vec![0_u8; 4096];
         let mut offset = 0;
         loop {
             match gz.read(&mut buf[offset..]) {

@@ -16,7 +16,11 @@ use tokio::{
     fs::File,
     io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWriteExt, BufReader},
     process::Command,
-    sync::mpsc::{channel, error::TryRecvError, Receiver, Sender},
+    sync::mpsc::{
+        channel,
+        error::{TryRecvError, TrySendError},
+        Receiver, Sender,
+    },
     task::{spawn, spawn_blocking, JoinHandle},
 };
 use url::Url;
@@ -465,25 +469,63 @@ async fn input_from_gz_file(
     mut writer: impl AsyncWriteExt + Unpin,
     input_path: impl AsRef<Path>,
 ) -> Result<(), Error> {
-    let (mut s, r) = channel(1);
+    let (s, mut r) = channel(1);
+    let input_path = input_path.as_ref().to_path_buf();
+    let gz_task = spawn_blocking(move || read_from_gzip(&input_path, s));
 
-    let mut buf = Vec::new();
-    loop {
-        if reader.read_until(b'\n', &mut buf)? == 0 {
-            break;
-        }
+    while let Some(buf) = r.recv().await {
         writer.write_all(&buf).await?;
-        buf.clear();
     }
+
+    gz_task.await??;
     Ok(())
 }
 
 fn read_from_gzip(input_path: &Path, mut s: Sender<Vec<u8>>) -> Result<(), Error> {
-    use std::io::{BufRead, BufReader};
-    let input_file = File::open(&input_path)?;
-    let gz = GzDecoder::new(input_file);
-    let mut reader = BufReader::new(gz);
+    use std::{
+        fs::File,
+        io::{ErrorKind, Read},
+    };
 
+    let input_file = File::open(&input_path)?;
+    let mut gz = GzDecoder::new(input_file);
+
+    loop {
+        let mut buf = vec![0u8; 4096];
+        let mut offset = 0;
+        loop {
+            match gz.read(&mut buf[offset..]) {
+                Ok(0) => {
+                    break;
+                }
+                Ok(n) => {
+                    offset += n;
+                }
+                Err(e) if e.kind() == ErrorKind::Interrupted => {}
+                Err(e) => {
+                    return Err(e.into());
+                }
+            }
+        }
+        buf.truncate(offset);
+        let mut buf_opt = Some(buf);
+        while let Some(buf) = buf_opt.take() {
+            match s.try_send(buf) {
+                Ok(_) => {
+                    break;
+                }
+                Err(TrySendError::Full(buf)) => {
+                    buf_opt.replace(buf);
+                }
+                Err(e) => {
+                    return Err(e.into());
+                }
+            }
+        }
+        if offset < 4096 {
+            break;
+        }
+    }
     Ok(())
 }
 
@@ -503,6 +545,7 @@ async fn output_to_gz_file(
         }
         s.send(buf).await?;
     }
+    drop(s);
 
     gz_task.await??;
 
@@ -510,10 +553,7 @@ async fn output_to_gz_file(
 }
 
 fn write_to_gzip(output_path: &Path, mut r: Receiver<Vec<u8>>) -> Result<(), Error> {
-    use std::fs::File;
-    use std::io::Write;
-    use std::thread::sleep;
-    use std::time::Duration;
+    use std::{fs::File, io::Write, thread::sleep, time::Duration};
 
     let file_name = output_path
         .file_name()

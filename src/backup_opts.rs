@@ -539,8 +539,7 @@ async fn output_to_gz_file(
 
     loop {
         let mut buf = Vec::with_capacity(4096);
-        let bytes = reader.read_buf(&mut buf).await?;
-        if bytes == 0 {
+        if reader.read_buf(&mut buf).await? == 0 {
             break;
         }
         send.send(buf).await?;

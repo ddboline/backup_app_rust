@@ -1,4 +1,5 @@
 use anyhow::{format_err, Error};
+use deadqueue::unlimited::Queue;
 use derive_more::Display;
 use flate2::{read::GzDecoder, Compression, GzBuilder};
 use futures::future::try_join_all;
@@ -9,6 +10,7 @@ use std::{
     path::{Path, PathBuf},
     process::Stdio,
     str::FromStr,
+    sync::Arc,
 };
 use structopt::StructOpt;
 use tempfile::NamedTempFile;
@@ -38,6 +40,8 @@ pub struct BackupOpts {
     pub config_file: PathBuf,
     #[structopt(short, long)]
     pub key: Option<StackString>,
+    #[structopt(short, long)]
+    pub num_workers: Option<usize>,
 }
 
 impl BackupOpts {
@@ -49,119 +53,117 @@ impl BackupOpts {
                 opts.config_file
             ));
         }
+        let queue: Arc<Queue<Option<(BackupCommand, StackString, Entry)>>> = Arc::new(Queue::new());
         let config = Config::new(&opts.config_file)?;
-        match opts.command {
-            BackupCommand::List => match opts.key {
-                None => println!("{}", config),
-                Some(key) => {
-                    for (k, v) in config.iter() {
-                        if &key == k {
-                            println!("{} {}", k, v);
-                        }
-                    }
-                }
-            },
-            BackupCommand::Backup => {
-                #[allow(clippy::filter_map)]
-                let futures = config
-                    .iter()
-                    .filter(|(k, _)| match &opts.key {
-                        None => true,
-                        Some(key) => &key == k,
-                    })
-                    .map(|(key, val)| async move {
-                        match val {
-                            Entry::FullPostgresBackup { destination } => {
-                                assert!(destination.scheme() == "file");
-                                let destination_path: PathBuf = destination.path().into();
-                                run_pg_dumpall(destination_path).await?;
-                                println!("Finished full_postgres_backup {}", key);
-                            }
-                            Entry::Postgres {
-                                database_url,
-                                destination,
-                                tables,
-                                ..
-                            } => {
-                                let futures = tables.iter().map(|table| async move {
-                                    backup_table(&database_url, &destination, &table).await?;
-                                    Ok(())
-                                });
-                                let results: Result<Vec<_>, Error> = try_join_all(futures).await;
-                                results?;
-                                println!("Finished postgres_backup {}", key);
-                            }
-                            Entry::Local {
-                                require_sudo,
-                                destination,
-                                backup_paths,
-                                command_output,
-                                exclude,
-                            } => {
-                                run_local_backup(
-                                    *require_sudo,
-                                    destination,
-                                    backup_paths,
-                                    command_output,
-                                    exclude,
-                                )
-                                .await?;
-                                println!("Finished local {}", key);
-                            }
-                        }
-                        Ok(())
-                    });
-                let results: Result<Vec<_>, Error> = try_join_all(futures).await;
-                results?;
+        let num_workers = opts.num_workers.unwrap_or_else(|| num_cpus::get());
+        let worker_tasks: Vec<_> = (0..num_workers)
+            .map(|_| {
+                let queue = queue.clone();
+                spawn(async move { worker_task(&queue).await })
+            })
+            .collect();
+
+        for (key, val) in config.into_iter() {
+            if opts.key.is_none() || opts.key.as_ref() == Some(&key) {
+                queue.push(Some((opts.command, key, val)));
             }
-            BackupCommand::Restore => {
-                #[allow(clippy::filter_map)]
-                let futures = config
-                    .iter()
-                    .filter(|(k, _)| match &opts.key {
-                        None => true,
-                        Some(key) => &key == k,
-                    })
-                    .map(|(key, val)| async move {
-                        match val {
-                            Entry::FullPostgresBackup { destination } => {
-                                assert!(destination.scheme() == "file");
-                                let destination_path: PathBuf = destination.path().into();
-                                run_pg_restore(destination_path).await?;
-                                println!("Finished restore full_postgres_backup {}", key);
-                            }
-                            Entry::Postgres {
-                                database_url,
-                                destination,
-                                tables,
-                                sequences,
-                            } => {
-                                let futures = tables.iter().map(|table| async move {
-                                    restore_table(&database_url, &destination, &table).await?;
-                                    Ok(())
-                                });
-                                let results: Result<Vec<_>, Error> = try_join_all(futures).await;
-                                results?;
-                                restore_sequences(&database_url, sequences).await?;
-                                println!("Finished postgres_retore {}", key);
-                            }
-                            Entry::Local {
-                                require_sudo,
-                                destination,
-                                ..
-                            } => {
-                                run_local_restore(*require_sudo, destination).await?;
-                                println!("Finished local_restore {}", key);
-                            }
-                        }
-                        Ok(())
-                    });
-                let results: Result<Vec<_>, Error> = try_join_all(futures).await;
-                results?;
-            }
+        }
+
+        worker_tasks.iter().for_each(|_| queue.push(None));
+
+        for task in worker_tasks {
+            task.await??;
         }
         Ok(())
     }
+}
+
+async fn worker_task(
+    queue: &Queue<Option<(BackupCommand, StackString, Entry)>>,
+) -> Result<(), Error> {
+    while let Some((command, key, entry)) = queue.pop().await {
+        process_entry(command, &key, &entry).await?;
+    }
+    Ok(())
+}
+
+async fn process_entry(command: BackupCommand, key: &str, entry: &Entry) -> Result<(), Error> {
+    match command {
+        BackupCommand::List => {
+            println!("{} {}", key, entry);
+        }
+        BackupCommand::Backup => match entry {
+            Entry::FullPostgresBackup { destination } => {
+                assert!(destination.scheme() == "file");
+                let destination_path: PathBuf = destination.path().into();
+                run_pg_dumpall(destination_path).await?;
+                println!("Finished full_postgres_backup {}", key);
+            }
+            Entry::Postgres {
+                database_url,
+                destination,
+                tables,
+                ..
+            } => {
+                let futures = tables.iter().map(|table| async move {
+                    backup_table(&database_url, &destination, &table).await?;
+                    Ok(())
+                });
+                let results: Result<Vec<_>, Error> = try_join_all(futures).await;
+                results?;
+                println!("Finished postgres_backup {}", key);
+            }
+            Entry::Local {
+                require_sudo,
+                destination,
+                backup_paths,
+                command_output,
+                exclude,
+            } => {
+                run_local_backup(
+                    *require_sudo,
+                    destination,
+                    backup_paths,
+                    command_output,
+                    exclude,
+                )
+                .await?;
+                println!("Finished local {}", key);
+            }
+        },
+        BackupCommand::Restore => match entry {
+            Entry::FullPostgresBackup { destination } => {
+                assert!(destination.scheme() == "file");
+                let destination_path: PathBuf = destination.path().into();
+                run_pg_restore(destination_path).await?;
+                println!("Finished restore full_postgres_backup {}", key);
+            }
+            Entry::Postgres {
+                database_url,
+                destination,
+                tables,
+                sequences,
+            } => {
+                let futures = tables.iter().map(|table| async move {
+                    restore_table(&database_url, &destination, &table).await?;
+                    Ok(())
+                });
+                let results: Result<Vec<_>, Error> = try_join_all(futures).await;
+                results?;
+                restore_sequences(&database_url, sequences).await?;
+                println!("Finished postgres_retore {}", key);
+            }
+            Entry::Local {
+                require_sudo,
+                destination,
+                ..
+            } => {
+                run_local_restore(*require_sudo, destination).await?;
+                println!("Finished local_restore {}", key);
+            }
+        },
+    };
+    Ok(())
 }
 
 async fn run_local_backup(
@@ -304,7 +306,6 @@ async fn backup_table(database_url: &Url, destination: &Url, table: &str) -> Res
         let key = format!("{}.sql.gz", table);
         s3.upload(tempfile.path(), bucket, &key).await?;
     }
-    println!("Finished {}", table);
     Ok(())
 }
 
@@ -593,7 +594,7 @@ fn write_to_gzip(output_path: &Path, mut recv: Receiver<Vec<u8>>) -> Result<(), 
     Ok(())
 }
 
-#[derive(Display)]
+#[derive(Display, Clone, Copy)]
 pub enum BackupCommand {
     #[display(fmt = "list")]
     List,

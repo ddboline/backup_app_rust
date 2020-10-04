@@ -54,7 +54,7 @@ def generate_postgres_toml():
             print(f'[{repo}]')
             print(f"database_url = '{db_url}'")
             # print(f"destination = 's3://{bucket}'")
-            print(f"destination = 'file:///home/ubuntu/setup_files/build/{repo}/backup'")
+            print(f"destination = 'file://{HOME}/setup_files/build/{repo}/backup'")
             print(f"tables = {tables}")
             if sequences:
                 sequences = '{' + ', '.join(f"{k}=['{t}', '{v}']" for (k, (t, v)) in sequences.items()) + '}'

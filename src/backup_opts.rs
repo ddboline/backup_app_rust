@@ -55,7 +55,7 @@ impl BackupOpts {
         }
         let queue: Arc<Queue<Option<(BackupCommand, StackString, Entry)>>> = Arc::new(Queue::new());
         let config = Config::new(&opts.config_file)?;
-        let num_workers = opts.num_workers.unwrap_or_else(|| num_cpus::get());
+        let num_workers = opts.num_workers.unwrap_or_else(num_cpus::get);
         let worker_tasks: Vec<_> = (0..num_workers)
             .map(|_| {
                 let queue = queue.clone();
@@ -63,7 +63,7 @@ impl BackupOpts {
             })
             .collect();
 
-        for (key, val) in config.into_iter() {
+        for (key, val) in config {
             if opts.key.is_none() || opts.key.as_ref() == Some(&key) {
                 queue.push(Some((opts.command, key, val)));
             }

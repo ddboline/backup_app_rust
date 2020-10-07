@@ -49,8 +49,8 @@ impl BackupOpts {
         let opts = Self::from_args();
         if !opts.config_file.exists() {
             return Err(format_err!(
-                "Config file {:?} does not exist",
-                opts.config_file
+                "Config file {} does not exist",
+                opts.config_file.to_string_lossy()
             ));
         }
         let queue: Arc<Queue<Option<(BackupCommand, StackString, Entry)>>> = Arc::new(Queue::new());
@@ -169,9 +169,9 @@ async fn process_entry(command: BackupCommand, key: &str, entry: &Entry) -> Resu
 async fn run_local_backup(
     require_sudo: bool,
     destination: &Url,
-    backup_paths: &[PathBuf],
-    command_output: &[(StackString, StackString)],
-    exclude: &[StackString],
+    backup_paths: &[impl AsRef<Path>],
+    command_output: &[(impl AsRef<str>, impl AsRef<str>)],
+    exclude: &[impl AsRef<str>],
 ) -> Result<(), Error> {
     let destination = destination.path();
     let mut args = Vec::new();
@@ -183,24 +183,24 @@ async fn run_local_backup(
         "zcvf".to_string(),
         destination.to_string(),
     ]);
-    let backup_paths: Vec<String> = backup_paths
+    let backup_paths: Vec<_> = backup_paths
         .iter()
-        .map(|p| p.to_string_lossy().into_owned())
+        .map(|p| p.as_ref().to_string_lossy().into_owned())
         .collect();
     args.extend_from_slice(&backup_paths);
     for (cmd, output_filename) in command_output {
-        let output_args: Vec<_> = cmd.split_whitespace().collect();
+        let output_args: Vec<_> = cmd.as_ref().split_whitespace().collect();
         let output = Command::new(output_args[0])
             .args(&output_args[1..])
             .output()
             .await?;
-        let mut output_file = File::create(&output_filename).await?;
+        let mut output_file = File::create(output_filename.as_ref()).await?;
         output_file.write_all(&output.stdout).await?;
-        args.push(output_filename.to_string());
+        args.push(output_filename.as_ref().to_string());
     }
     if !exclude.is_empty() {
         for ex in exclude {
-            args.push(format!("--exclude={}", ex));
+            args.push(format!("--exclude={}", ex.as_ref()));
         }
     }
     let mut p = Command::new(&args[0])
@@ -228,10 +228,10 @@ async fn run_local_backup(
         .output()
         .await?;
     if !output.stdout.is_empty() {
-        debug!("{:?}", output.stdout);
+        debug!("{}", String::from_utf8_lossy(&output.stdout));
     }
     if !output.stderr.is_empty() {
-        error!("{:?}", output.stderr);
+        error!("{}", String::from_utf8_lossy(&output.stderr));
     }
     Ok(())
 }
@@ -326,10 +326,10 @@ async fn restore_sequences(
             .output()
             .await?;
         if !output.stdout.is_empty() {
-            debug!("{:?}", output.stdout);
+            debug!("{}", String::from_utf8_lossy(&output.stdout));
         }
         if !output.stderr.is_empty() {
-            error!("{:?}", output.stderr);
+            error!("{}", String::from_utf8_lossy(&output.stderr));
         }
     }
 

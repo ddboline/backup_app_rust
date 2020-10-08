@@ -144,7 +144,7 @@ async fn process_entry(command: BackupCommand, key: &str, entry: &Entry) -> Resu
                 tables,
                 sequences,
             } => {
-                for table in &tables {
+                for table in tables {
                     restore_table(&database_url, &destination, &table).await?;
                 }
                 restore_sequences(&database_url, sequences).await?;

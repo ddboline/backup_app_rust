@@ -144,8 +144,11 @@ async fn process_entry(command: BackupCommand, key: &str, entry: &Entry) -> Resu
                 tables,
                 sequences,
             } => {
+                for table in tables.iter().rev() {
+                    clear_table(&database_url, table).await?;
+                }
                 for table in tables {
-                    restore_table(&database_url, &destination, &table).await?;
+                    restore_table(&database_url, &destination, table).await?;
                 }
                 restore_sequences(&database_url, sequences).await?;
                 println!("Finished postgres_retore {}", key);
@@ -333,6 +336,24 @@ async fn restore_sequences(
     Ok(())
 }
 
+async fn clear_table(database_url: &Url, table: &str) -> Result<(), Error> {
+    let output = Command::new("psql")
+        .args(&[
+            database_url.as_str(),
+            "-c",
+            &format!("DELETE FROM {}", table),
+        ])
+        .output()
+        .await?;
+    if !output.stdout.is_empty() {
+        debug!("delete from {}", String::from_utf8_lossy(&output.stdout));
+    }
+    if !output.stderr.is_empty() {
+        error!("delete from {}", String::from_utf8_lossy(&output.stderr));
+    }
+    Ok(())
+}
+
 async fn restore_table(database_url: &Url, destination: &Url, table: &str) -> Result<(), Error> {
     let tempdir = tempfile::tempdir()?;
     let destination_path = if destination.scheme() == "file" {
@@ -348,21 +369,6 @@ async fn restore_table(database_url: &Url, destination: &Url, table: &str) -> Re
         s3.download(bucket, &key, fname.as_ref()).await?;
         tempfile
     };
-
-    let output = Command::new("psql")
-        .args(&[
-            database_url.as_str(),
-            "-c",
-            &format!("DELETE FROM {}", table),
-        ])
-        .output()
-        .await?;
-    if !output.stdout.is_empty() {
-        debug!("delete from {}", String::from_utf8_lossy(&output.stdout));
-    }
-    if !output.stderr.is_empty() {
-        error!("delete from {}", String::from_utf8_lossy(&output.stderr));
-    }
 
     let mut p = Command::new("psql")
         .args(&[

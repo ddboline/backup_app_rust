@@ -144,12 +144,9 @@ async fn process_entry(command: BackupCommand, key: &str, entry: &Entry) -> Resu
                 tables,
                 sequences,
             } => {
-                let futures = tables.iter().map(|table| async move {
+                for table in &tables {
                     restore_table(&database_url, &destination, &table).await?;
-                    Ok(())
-                });
-                let results: Result<Vec<_>, Error> = try_join_all(futures).await;
-                results?;
+                }
                 restore_sequences(&database_url, sequences).await?;
                 println!("Finished postgres_retore {}", key);
             }

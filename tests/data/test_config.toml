@@ -16,6 +16,6 @@ tables = [
 ]
 
 [Dropbox]
-destination = 'file:///home/ddboline/temp.tar.gz'
-backup_paths = ['/home/ddboline/Dropbox']
+destination = 'file://HOME/temp.tar.gz'
+backup_paths = ['HOME/Dropbox']
 require_sudo = true

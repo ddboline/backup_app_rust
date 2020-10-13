@@ -300,7 +300,9 @@ mod tests {
         };
 
         let backup_paths = vec![home_dir.join("Dropbox")];
-        let destination = format!("file://{}/temp.tar.gz", home_dir.to_string_lossy()).as_str().try_into()?;
+        let destination = format!("file://{}/temp.tar.gz", home_dir.to_string_lossy())
+            .as_str()
+            .try_into()?;
         let local_entry = EntryToml {
             destination: Some(destination),
             backup_paths: Some(backup_paths),
@@ -316,7 +318,10 @@ mod tests {
         let config: Config = entries.try_into()?;
         println!("{:?}", config);
 
-        let data = include_str!("../tests/data/test_config.toml");
+        let home_dir = dirs::home_dir().expect("No HOME directory");
+
+        let data = include_str!("../tests/data/test_config.toml")
+            .replace("HOME", &home_dir.to_string_lossy());
         let config_file: ConfigToml = toml::from_str(&data)?;
         let config_file: Config = config_file.try_into()?;
         assert_eq!(config_file, config);
@@ -327,19 +332,28 @@ mod tests {
     #[ignore]
     fn test_local() -> Result<(), Error> {
         let home_dir = dirs::home_dir().expect("No HOME directory");
-        let p = home_dir.join(".config").join("backup_app_rust").join("postgres.toml");
+        let p = home_dir
+            .join(".config")
+            .join("backup_app_rust")
+            .join("postgres.toml");
         let data = fs::read_to_string(&p)?;
         let config_postgres: ConfigToml = toml::from_str(&data)?;
         let config_postgres: Config = config_postgres.try_into()?;
         println!("{:?}", config_postgres);
 
-        let p = home_dir.join(".config").join("backup_app_rust").join("local_home_backup.toml");
+        let p = home_dir
+            .join(".config")
+            .join("backup_app_rust")
+            .join("local_home_backup.toml");
         let data = fs::read_to_string(&p)?;
         let config_local_home: ConfigToml = toml::from_str(&data)?;
         let config_local_home: Config = config_local_home.try_into()?;
         println!("{:?}", config_local_home);
 
-        let p = home_dir.join(".config").join("backup_app_rust").join("local_backup.toml");
+        let p = home_dir
+            .join(".config")
+            .join("backup_app_rust")
+            .join("local_backup.toml");
         let data = fs::read_to_string(&p)?;
         let config_local: ConfigToml = toml::from_str(&data)?;
         let config_local: Config = config_local.try_into()?;

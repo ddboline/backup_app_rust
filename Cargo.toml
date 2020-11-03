@@ -1,6 +1,6 @@
 [package]
 name = "backup_app_rust"
-version = "0.1.6"
+version = "0.1.7"
 authors = ["Daniel Boline <ddboline@gmail.com>"]
 edition = "2018"
 
@@ -18,7 +18,7 @@ derive_more = "0.99"
 lazy_static = "1.4"
 structopt = "0.3"
 chrono = {version="0.4", features=["serde"]}
-regex = "1.3"
+regex = "1.4"
 deadqueue = "0.1"
 deadpool = "0.5"
 deadpool-postgres = "0.5"
@@ -28,7 +28,7 @@ flate2 = "1.0"
 tokio = { version="0.2", features=["full"]}
 log = "0.4"
 tokio-postgres = {version = "0.5", features = ["with-chrono-0_4", "with-uuid-0_8"]}
-env_logger = "0.7"
+env_logger = "0.8"
 tempfile = "3.1"
 rand = "0.7"
 futures = "0.3"
@@ -38,7 +38,7 @@ s3-ext = "0.1"
 sts_profile_auth = "0.5"
 parking_lot = "0.11"
 num_cpus = "1.13"
-stack-string = { git = "https://github.com/ddboline/stack-string-rs.git", tag="0.1.6", features=["diesel_types"] }
+stack-string = { git = "https://github.com/ddboline/stack-string-rs.git", tag="0.1.9", features=["diesel_types"] }
 
 [[bin]]
 name = "backup-app-rust"

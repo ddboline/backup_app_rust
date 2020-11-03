@@ -173,6 +173,7 @@ async fn run_local_backup(
     command_output: &[(impl AsRef<str>, impl AsRef<str>)],
     exclude: &[impl AsRef<str>],
 ) -> Result<(), Error> {
+    let user = std::env::var("USER").unwrap_or_else(|_| "root".to_string());
     let destination = destination.path();
     let mut args = Vec::new();
     if require_sudo {
@@ -222,16 +223,17 @@ async fn run_local_backup(
     stdout_task.await??;
     stderr_task.await??;
 
-    let user = std::env::var("USER").unwrap_or_else(|_| "root".to_string());
-    let output = Command::new("sudo")
-        .args(&["chown", &format!("{u}:{u}", u = user), destination])
-        .output()
-        .await?;
-    if !output.stdout.is_empty() {
-        debug!("{}", String::from_utf8_lossy(&output.stdout));
-    }
-    if !output.stderr.is_empty() {
-        error!("{}", String::from_utf8_lossy(&output.stderr));
+    if require_sudo {
+        let output = Command::new("sudo")
+            .args(&["chown", &format!("{u}:{u}", u = user), destination])
+            .output()
+            .await?;
+        if !output.stdout.is_empty() {
+            debug!("{}", String::from_utf8_lossy(&output.stdout));
+        }
+        if !output.stderr.is_empty() {
+            error!("{}", String::from_utf8_lossy(&output.stderr));
+        }
     }
     Ok(())
 }

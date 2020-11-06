@@ -17,7 +17,8 @@ use rand::{
     thread_rng,
 };
 use std::future::Future;
-use tokio::time::{delay_for, Duration};
+use std::time::Duration;
+use tokio::time::{sleep};
 
 pub async fn exponential_retry<T, U, F>(f: T) -> Result<U, Error>
 where
@@ -30,7 +31,7 @@ where
         match f().await {
             Ok(resp) => return Ok(resp),
             Err(err) => {
-                delay_for(Duration::from_millis((timeout * 1000.0) as u64)).await;
+                sleep(Duration::from_millis((timeout * 1000.0) as u64)).await;
                 timeout *= 4.0 * f64::from(range.sample(&mut thread_rng())) / 1000.0;
                 if timeout >= 64.0 {
                     return Err(err);

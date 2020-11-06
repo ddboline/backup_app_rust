@@ -219,7 +219,7 @@ async fn run_local_backup(
     let stdout_task: JoinHandle<Result<(), Error>> =
         spawn(async move { output_to_debug(reader, b'\n').await });
 
-    p.await?;
+    p.wait().await?;
     stdout_task.await??;
     stderr_task.await??;
 
@@ -265,7 +265,7 @@ async fn run_local_restore(require_sudo: bool, destination: &Url) -> Result<(), 
     let stdout_task: JoinHandle<Result<(), Error>> =
         spawn(async move { output_to_debug(reader, b'\n').await });
 
-    p.await?;
+    p.wait().await?;
     stdout_task.await??;
     stderr_task.await??;
 
@@ -296,7 +296,7 @@ async fn backup_table(database_url: &Url, destination: &Url, table: &str) -> Res
         spawn(async move { output_to_error(reader, b'\n').await });
     let stdout_task: JoinHandle<Result<(), Error>> =
         spawn(async move { output_to_gz_file(stdout, &destination_path).await });
-    p.await?;
+    p.wait().await?;
     stdout_task.await??;
     stderr_task.await??;
 
@@ -396,7 +396,7 @@ async fn restore_table(database_url: &Url, destination: &Url, table: &str) -> Re
     let stderr_task: JoinHandle<Result<(), Error>> =
         spawn(async move { output_to_error(reader, b'\n').await });
 
-    p.await?;
+    p.wait().await?;
     stdin_task.await??;
     stdout_task.await??;
     stderr_task.await??;
@@ -417,7 +417,7 @@ async fn run_pg_dumpall(destination_path: PathBuf) -> Result<(), Error> {
         spawn(async move { output_to_error(reader, b'\n').await });
     let stdout_task: JoinHandle<Result<(), Error>> =
         spawn(async move { output_to_gz_file(stdout, &destination_path).await });
-    p.await?;
+    p.wait().await?;
     stdout_task.await??;
     stderr_task.await??;
     Ok(())
@@ -444,7 +444,7 @@ async fn run_pg_restore(destination_path: PathBuf) -> Result<(), Error> {
         spawn(async move { output_to_error(reader, b'\n').await });
 
     stdin_task.await??;
-    p.await?;
+    p.wait().await?;
     stdout_task.await??;
     stderr_task.await??;
 
@@ -499,7 +499,7 @@ async fn input_from_gz_file(
     Ok(())
 }
 
-fn read_from_gzip(input_path: &Path, mut send: Sender<Vec<u8>>) -> Result<(), Error> {
+fn read_from_gzip(input_path: &Path, send: Sender<Vec<u8>>) -> Result<(), Error> {
     use std::{
         fs::File,
         io::{ErrorKind, Read},
@@ -552,7 +552,7 @@ async fn output_to_gz_file(
     mut reader: impl AsyncReadExt + Unpin,
     output_path: impl AsRef<Path>,
 ) -> Result<(), Error> {
-    let (mut send, recv) = channel(1);
+    let (send, recv) = channel(1);
     let output_path = output_path.as_ref().to_path_buf();
     let gz_task = spawn_blocking(move || write_to_gzip(&output_path, recv));
 

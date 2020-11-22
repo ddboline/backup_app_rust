@@ -489,7 +489,7 @@ async fn input_from_gz_file(
 ) -> Result<(), Error> {
     let (send, mut recv) = channel(1);
     let input_path = input_path.as_ref().to_path_buf();
-    let gz_task = spawn_blocking(move || read_from_gzip(&input_path, send));
+    let gz_task = spawn_blocking(move || read_from_gzip(&input_path, &send));
 
     while let Some(buf) = recv.recv().await {
         writer.write_all(&buf).await?;
@@ -499,7 +499,7 @@ async fn input_from_gz_file(
     Ok(())
 }
 
-fn read_from_gzip(input_path: &Path, send: Sender<Vec<u8>>) -> Result<(), Error> {
+fn read_from_gzip(input_path: &Path, send: &Sender<Vec<u8>>) -> Result<(), Error> {
     use std::{
         fs::File,
         io::{ErrorKind, Read},

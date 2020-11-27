@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use stack_string::StackString;
 use std::borrow::Cow;
 use std::{
-    collections::{hash_map::IntoIter, HashMap, HashSet},
+    collections::{hash_map::IntoIter, HashMap},
     convert::{TryFrom, TryInto},
     fmt, fs,
     path::{Path, PathBuf},

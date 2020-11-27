@@ -5,7 +5,12 @@ tables = [
     'instance_family',
     'instance_list',
 ]
-sequences = {intrusion_log_id_seq=['intrusion_log', 'id']}
+
+[aws_app_rust.sequences]
+intrusion_log_id_seq = ['intrusion_log', 'id']
+
+[aws_app_rust.columns]
+instance_family = ["id", "family_name"]
 
 [calendar_app_rust]
 database_url = 'postgresql://user:password@localhost:5432/calendar_app_cache'
@@ -16,6 +21,6 @@ tables = [
 ]
 
 [Dropbox]
-destination = 'file://HOME/temp.tar.gz'
+destination = 'file://HOME/temp_SYSID_DATE.tar.gz'
 backup_paths = ['HOME/Dropbox']
 require_sudo = true

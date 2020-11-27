@@ -5,8 +5,9 @@ use itertools::Itertools;
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use stack_string::StackString;
+use std::borrow::Cow;
 use std::{
-    collections::{hash_map::IntoIter, HashMap},
+    collections::{hash_map::IntoIter, HashMap, HashSet},
     convert::{TryFrom, TryInto},
     fmt, fs,
     path::{Path, PathBuf},
@@ -55,6 +56,8 @@ pub enum Entry {
         database_url: Url,
         destination: Url,
         tables: Vec<StackString>,
+        columns: HashMap<StackString, Vec<StackString>>,
+        dependencies: HashMap<StackString, Vec<StackString>>,
         sequences: HashMap<StackString, (StackString, StackString)>,
     },
     Local {
@@ -76,15 +79,39 @@ impl fmt::Display for Entry {
                 database_url,
                 destination,
                 tables,
+                columns,
+                dependencies,
                 sequences,
             } => format!(
-                "postgres\n\tdb_url: {}\n\tdest: {}\n{}{}",
+                "postgres\n\tdb_url: {}\n\tdest: {}\n{}{}{}{}",
                 database_url.as_str(),
                 destination.as_str(),
                 if tables.is_empty() {
                     "".to_string()
                 } else {
                     format!("\ttables: {}\n", tables.join(", "))
+                },
+                if columns.is_empty() {
+                    "".to_string()
+                } else {
+                    format!(
+                        "\tcolumns: {}\n",
+                        columns
+                            .iter()
+                            .map(|(k, v)| { format!("{}: [{}]", k, v.join(",")) })
+                            .join(", ")
+                    )
+                },
+                if dependencies.is_empty() {
+                    "".to_string()
+                } else {
+                    format!(
+                        "\tdependencies: {}\n",
+                        dependencies
+                            .iter()
+                            .map(|(k, v)| { format!("{}: [{}]", k, v.join(",")) })
+                            .join(", ")
+                    )
                 },
                 if sequences.is_empty() {
                     "".to_string()
@@ -158,15 +185,50 @@ impl TryFrom<ConfigToml> for Config {
                     return Ok((key.into(), Entry::FullPostgresBackup { destination }));
                 } else if let Some(database_url) = entry.database_url {
                     if let Some(tables) = entry.tables {
-                        return Ok((
-                            key.into(),
-                            Entry::Postgres {
-                                database_url: database_url.into(),
-                                destination,
-                                tables,
-                                sequences,
-                            },
-                        ));
+                        let dependencies = entry
+                            .dependencies
+                            .unwrap_or(HashMap::new())
+                            .into_iter()
+                            .map(|(k, mut v)| {
+                                v.sort();
+                                v.dedup();
+                                (k.into(), v)
+                            })
+                            .collect();
+                        if let Some(columns) = entry.columns {
+                            let columns: HashMap<_, _> =
+                                columns.into_iter().map(|(k, v)| (k.into(), v)).collect();
+                            let tables = tables
+                                .iter()
+                                .chain(columns.keys())
+                                .sorted()
+                                .dedup()
+                                .map(|x| x.clone())
+                                .collect();
+                            return Ok((
+                                key.into(),
+                                Entry::Postgres {
+                                    database_url: database_url.into(),
+                                    destination,
+                                    tables,
+                                    columns,
+                                    dependencies,
+                                    sequences,
+                                },
+                            ));
+                        } else {
+                            return Ok((
+                                key.into(),
+                                Entry::Postgres {
+                                    database_url: database_url.into(),
+                                    destination,
+                                    tables,
+                                    columns: HashMap::new(),
+                                    dependencies,
+                                    sequences,
+                                },
+                            ));
+                        }
                     }
                 } else if let Some(backup_paths) = entry.backup_paths {
                     let backup_paths = backup_paths
@@ -212,6 +274,8 @@ struct EntryToml {
     destination: Option<UrlWrapper>,
     backup_paths: Option<Vec<PathBuf>>,
     tables: Option<Vec<StackString>>,
+    columns: Option<HashMap<String, Vec<StackString>>>,
+    dependencies: Option<HashMap<String, Vec<StackString>>>,
     sequences: Option<HashMap<String, (StackString, StackString)>>,
     command_output: Option<Vec<(StackString, StackString)>>,
     exclude: Option<Vec<StackString>>,
@@ -222,11 +286,17 @@ struct EntryToml {
 pub struct UrlWrapper(Url);
 
 impl UrlWrapper {
-    fn replace_date_sysid(s: &str) -> Result<StackString, Error> {
+    fn replace_date(s: &str) -> Cow<str> {
         if s.contains("DATE") {
             let date = Utc::now().format("%Y%m%d").to_string();
-            Ok(s.replace("DATE", &date).into())
-        } else if s.contains("SYSID") {
+            s.replace("DATE", &date).into()
+        } else {
+            s.into()
+        }
+    }
+
+    fn replace_sysid(s: &str) -> Result<Cow<str>, Error> {
+        if s.contains("SYSID") {
             let date = Utc::now().format("%Y%m%d").to_string();
             let sysid: Vec<u8> = std::process::Command::new("uname")
                 .args(&["-snrmpio"])
@@ -256,7 +326,8 @@ impl From<UrlWrapper> for String {
 impl TryFrom<&str> for UrlWrapper {
     type Error = Error;
     fn try_from(item: &str) -> Result<Self, Self::Error> {
-        let url: Url = UrlWrapper::replace_date_sysid(item)?.parse()?;
+        let s = UrlWrapper::replace_date(item);
+        let url: Url = UrlWrapper::replace_sysid(&s)?.parse()?;
         Ok(Self(url))
     }
 }
@@ -264,6 +335,7 @@ impl TryFrom<&str> for UrlWrapper {
 #[cfg(test)]
 mod tests {
     use anyhow::Error;
+    use chrono::Utc;
     use maplit::hashmap;
     use std::{convert::TryInto, fs};
 
@@ -276,6 +348,9 @@ mod tests {
         let database_url: UrlWrapper =
             "postgresql://user:password@localhost:5432/aws_app_cache".try_into()?;
         let tables = vec!["instance_family".into(), "instance_list".into()];
+        let columns = hashmap! {
+            "instance_family".into() => vec!["id".into(), "family_name".into()],
+        };
         let destination = "s3://aws-app-rust-db-backup".try_into()?;
         let sequences = hashmap! {
             "intrusion_log_id_seq".into() => ("intrusion_log".into(), "id".into()),
@@ -283,6 +358,7 @@ mod tests {
         let aws_entry = EntryToml {
             database_url: Some(database_url),
             tables: Some(tables),
+            columns: Some(columns),
             destination: Some(destination),
             sequences: Some(sequences),
             ..EntryToml::default()
@@ -299,10 +375,29 @@ mod tests {
             ..EntryToml::default()
         };
 
+        let date = Utc::now().format("%Y%m%d").to_string();
+        let sysid: Vec<u8> = std::process::Command::new("uname")
+            .args(&["-snrmpio"])
+            .output()?
+            .stdout
+            .into_iter()
+            .map(|c| match c {
+                b' ' | b'/' | b'.' => b'_',
+                x => x,
+            })
+            .collect();
+        let sysid = String::from_utf8(sysid)?;
+        let sysid = format!("{}_{}", sysid, date);
+
         let backup_paths = vec![home_dir.join("Dropbox")];
-        let destination = format!("file://{}/temp.tar.gz", home_dir.to_string_lossy())
-            .as_str()
-            .try_into()?;
+        let destination = format!(
+            "file://{}/temp_{}_{}.tar.gz",
+            home_dir.to_string_lossy(),
+            sysid,
+            date
+        )
+        .as_str()
+        .try_into()?;
         let local_entry = EntryToml {
             destination: Some(destination),
             backup_paths: Some(backup_paths),
@@ -324,6 +419,7 @@ mod tests {
             .replace("HOME", &home_dir.to_string_lossy());
         let config_file: ConfigToml = toml::from_str(&data)?;
         let config_file: Config = config_file.try_into()?;
+        println!("{}", config_file);
         assert_eq!(config_file, config);
         Ok(())
     }

@@ -3,10 +3,11 @@ use deadqueue::unlimited::Queue;
 use derive_more::Display;
 use flate2::{read::GzDecoder, Compression, GzBuilder};
 use futures::future::try_join_all;
+use itertools::Itertools;
 use log::{debug, error};
 use stack_string::StackString;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     path::{Path, PathBuf},
     process::Stdio,
     str::FromStr,
@@ -103,10 +104,13 @@ async fn process_entry(command: BackupCommand, key: &str, entry: &Entry) -> Resu
                 database_url,
                 destination,
                 tables,
+                columns,
                 ..
             } => {
                 let futures = tables.iter().map(|table| async move {
-                    backup_table(&database_url, &destination, &table).await?;
+                    let empty = Vec::new();
+                    let columns = columns.get(table).unwrap_or(&empty);
+                    backup_table(&database_url, &destination, &table, columns).await?;
                     Ok(())
                 });
                 let results: Result<Vec<_>, Error> = try_join_all(futures).await;
@@ -142,13 +146,27 @@ async fn process_entry(command: BackupCommand, key: &str, entry: &Entry) -> Resu
                 database_url,
                 destination,
                 tables,
+                columns,
+                dependencies,
                 sequences,
             } => {
-                for table in tables.iter().rev() {
+                let sorted_tables = if dependencies.is_empty() {
+                    Vec::new()
+                } else {
+                    topological_sort(dependencies).unwrap_or_else(|_| Vec::new())
+                };
+                let sorted_tables = if sorted_tables.is_empty() {
+                    tables
+                } else {
+                    &sorted_tables
+                };
+                for table in sorted_tables.iter().rev() {
                     clear_table(&database_url, table).await?;
                 }
-                for table in tables {
-                    restore_table(&database_url, &destination, table).await?;
+                for table in sorted_tables {
+                    let empty = Vec::new();
+                    let columns = columns.get(table).unwrap_or(&empty);
+                    restore_table(&database_url, &destination, table, columns).await?;
                 }
                 restore_sequences(&database_url, sequences).await?;
                 println!("Finished postgres_retore {}", key);
@@ -272,20 +290,30 @@ async fn run_local_restore(require_sudo: bool, destination: &Url) -> Result<(), 
     Ok(())
 }
 
-async fn backup_table(database_url: &Url, destination: &Url, table: &str) -> Result<(), Error> {
+async fn backup_table(
+    database_url: &Url,
+    destination: &Url,
+    table: &str,
+    columns: &[impl AsRef<str>],
+) -> Result<(), Error> {
     let tempfile = NamedTempFile::new()?;
     let destination_path = if destination.scheme() == "file" {
         Path::new(destination.path()).join(format!("{}.sql.gz", table))
     } else {
         tempfile.path().to_path_buf()
     };
+    let query = if columns.is_empty() {
+        format!("COPY {} TO STDOUT", table)
+    } else {
+        format!(
+            "COPY {} ({}) TO STDOUT",
+            table,
+            columns.iter().map(AsRef::as_ref).join(",")
+        )
+    };
 
     let mut p = Command::new("psql")
-        .args(&[
-            database_url.as_str(),
-            "-c",
-            &format!("COPY {} TO STDOUT", table),
-        ])
+        .args(&[database_url.as_str(), "-c", &query])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()?;
@@ -356,7 +384,12 @@ async fn clear_table(database_url: &Url, table: &str) -> Result<(), Error> {
     Ok(())
 }
 
-async fn restore_table(database_url: &Url, destination: &Url, table: &str) -> Result<(), Error> {
+async fn restore_table(
+    database_url: &Url,
+    destination: &Url,
+    table: &str,
+    columns: &[impl AsRef<str>],
+) -> Result<(), Error> {
     let tempdir = tempfile::tempdir()?;
     let destination_path = if destination.scheme() == "file" {
         Path::new(destination.path()).join(format!("{}.sql.gz", table))
@@ -371,13 +404,18 @@ async fn restore_table(database_url: &Url, destination: &Url, table: &str) -> Re
         s3.download(bucket, &key, fname.as_ref()).await?;
         tempfile
     };
+    let query = if columns.is_empty() {
+        format!("COPY {} FROM STDIN", table)
+    } else {
+        format!(
+            "COPY {} ({}) FROM STDIN",
+            table,
+            columns.iter().map(AsRef::as_ref).join(",")
+        )
+    };
 
     let mut p = Command::new("psql")
-        .args(&[
-            database_url.as_str(),
-            "-c",
-            &format!("COPY {} FROM STDIN", table),
-        ])
+        .args(&[database_url.as_str(), "-c", &query])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .stdin(Stdio::piped())
@@ -621,11 +659,51 @@ impl FromStr for BackupCommand {
     }
 }
 
+fn topological_sort(
+    dag: &HashMap<StackString, Vec<StackString>>,
+) -> Result<Vec<StackString>, Error> {
+    let mut parents_graph: HashMap<_, HashSet<_>> =
+        dag.iter().fold(HashMap::new(), |mut h, (k, v)| {
+            for child in v {
+                h.entry(child).or_default().insert(k);
+            }
+            h
+        });
+    let mut sorted_elements: Vec<StackString> = Vec::new();
+    let mut nodes_without_incoming_edge = Vec::new();
+    for key in dag.keys() {
+        if !parents_graph.contains_key(key) {
+            nodes_without_incoming_edge.push(key);
+        }
+    }
+    while let Some(node) = nodes_without_incoming_edge.pop() {
+        sorted_elements.push(node.clone());
+        if let Some(children) = dag.get(node) {
+            for child in children {
+                if let Some(parents) = parents_graph.get_mut(child) {
+                    parents.remove(node);
+                    if parents.is_empty() {
+                        nodes_without_incoming_edge.push(child);
+                    }
+                }
+            }
+        }
+    }
+    for node in parents_graph.values() {
+        if !node.is_empty() {
+            return Err(format_err!("Graph has cycles {:?}", dag));
+        }
+    }
+    Ok(sorted_elements)
+}
+
 #[cfg(test)]
 mod tests {
     use anyhow::Error;
+    use maplit::hashmap;
+    use stack_string::StackString;
 
-    use crate::backup_opts::BackupCommand;
+    use crate::backup_opts::{topological_sort, BackupCommand};
 
     #[test]
     fn test_backupcommand_display() -> Result<(), Error> {
@@ -636,6 +714,46 @@ mod tests {
             BackupCommand::Restore
         );
         assert_eq!(&s, "list backup restore");
+        Ok(())
+    }
+
+    #[test]
+    fn test_topological_sort() -> Result<(), Error> {
+        let dependencies = hashmap! {
+            "n0".into() => vec!["n1".into(), "n2".into(), "n3".into()],
+            "n1".into() => vec!["n4".into(), "n6".into()],
+            "n2".into() => vec!["n4".into()],
+            "n3".into() => vec!["n5".into(), "n6".into()],
+            "n6".into() => vec!["n7".into()],
+            "n7".into() => vec!["n4".into()],
+        };
+        let expected: Vec<StackString> = vec![
+            "n0".into(),
+            "n3".into(),
+            "n5".into(),
+            "n2".into(),
+            "n1".into(),
+            "n6".into(),
+            "n7".into(),
+            "n4".into(),
+        ];
+        let result = topological_sort(&dependencies)?;
+        assert_eq!(result, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn test_topological_sort_cycle() -> Result<(), Error> {
+        let deps = hashmap! {
+            "n0".into() => vec!["n1".into(), "n2".into(), "n3".into()],
+            "n1".into() => vec!["n4".into(), "n6".into()],
+            "n2".into() => vec!["n4".into()],
+            "n3".into() => vec!["n5".into(), "n6".into()],
+            "n4".into() => vec!["n6".into()],
+            "n6".into() => vec!["n1".into()],
+        };
+        let result = topological_sort(&deps);
+        assert!(result.is_err());
         Ok(())
     }
 }

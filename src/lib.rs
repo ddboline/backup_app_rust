@@ -16,8 +16,7 @@ use rand::{
     distributions::{Distribution, Uniform},
     thread_rng,
 };
-use std::future::Future;
-use std::time::Duration;
+use std::{future::Future, time::Duration};
 use tokio::time::sleep;
 
 pub async fn exponential_retry<T, U, F>(f: T) -> Result<U, Error>

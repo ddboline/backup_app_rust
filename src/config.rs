@@ -5,8 +5,8 @@ use itertools::Itertools;
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use stack_string::StackString;
-use std::borrow::Cow;
 use std::{
+    borrow::Cow,
     collections::{hash_map::IntoIter, HashMap},
     convert::{TryFrom, TryInto},
     fmt, fs,

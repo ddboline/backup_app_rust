@@ -150,10 +150,10 @@ async fn process_entry(command: BackupCommand, key: &str, entry: &Entry) -> Resu
                 dependencies,
                 sequences,
             } => {
-                let sorted_tables = if !dependencies.is_empty() {
-                    topological_sort(dependencies).unwrap_or_else(|_| Vec::new())
-                } else {
+                let sorted_tables = if dependencies.is_empty() {
                     Vec::new()
+                } else {
+                    topological_sort(dependencies).unwrap_or_else(|_| Vec::new())
                 };
                 let sorted_tables = if sorted_tables.is_empty() {
                     tables
@@ -308,7 +308,7 @@ async fn backup_table(
         format!(
             "COPY {} ({}) TO STDOUT",
             table,
-            columns.iter().map(|x| x.as_ref()).join(",")
+            columns.iter().map(AsRef::as_ref).join(",")
         )
     };
 
@@ -410,7 +410,7 @@ async fn restore_table(
         format!(
             "COPY {} ({}) FROM STDIN",
             table,
-            columns.iter().map(|x| x.as_ref()).join(",")
+            columns.iter().map(AsRef::as_ref).join(",")
         )
     };
 

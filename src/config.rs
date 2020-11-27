@@ -187,7 +187,7 @@ impl TryFrom<ConfigToml> for Config {
                     if let Some(tables) = entry.tables {
                         let dependencies = entry
                             .dependencies
-                            .unwrap_or(HashMap::new())
+                            .unwrap_or_else(|| HashMap::new())
                             .into_iter()
                             .map(|(k, mut v)| {
                                 v.sort();
@@ -203,7 +203,7 @@ impl TryFrom<ConfigToml> for Config {
                                 .chain(columns.keys())
                                 .sorted()
                                 .dedup()
-                                .map(|x| x.clone())
+                                .cloned()
                                 .collect();
                             return Ok((
                                 key.into(),

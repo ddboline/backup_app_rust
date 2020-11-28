@@ -156,9 +156,9 @@ async fn process_entry(command: BackupCommand, key: &str, entry: &Entry) -> Resu
                     topological_sort(dependencies).unwrap_or_else(|_| Vec::new())
                 };
                 let sorted_tables = if sorted_tables.is_empty() {
-                    tables
+                    tables.iter().collect()
                 } else {
-                    &sorted_tables
+                    sorted_tables
                 };
                 for table in sorted_tables.iter().rev() {
                     clear_table(&database_url, table).await?;
@@ -659,17 +659,22 @@ impl FromStr for BackupCommand {
     }
 }
 
+fn get_parent_graph(
+    dag: &HashMap<StackString, Vec<StackString>>,
+) -> HashMap<&StackString, HashSet<&StackString>> {
+    dag.iter().fold(HashMap::new(), |mut h, (k, v)| {
+        for child in v {
+            h.entry(child).or_default().insert(k);
+        }
+        h
+    })
+}
+
 fn topological_sort(
     dag: &HashMap<StackString, Vec<StackString>>,
-) -> Result<Vec<StackString>, Error> {
-    let mut parents_graph: HashMap<_, HashSet<_>> =
-        dag.iter().fold(HashMap::new(), |mut h, (k, v)| {
-            for child in v {
-                h.entry(child).or_default().insert(k);
-            }
-            h
-        });
-    let mut sorted_elements: Vec<StackString> = Vec::new();
+) -> Result<Vec<&StackString>, Error> {
+    let mut parents_graph: HashMap<_, HashSet<_>> = get_parent_graph(dag);
+    let mut sorted_elements = Vec::new();
     let mut nodes_without_incoming_edge = Vec::new();
     for key in dag.keys() {
         if !parents_graph.contains_key(key) {
@@ -677,7 +682,7 @@ fn topological_sort(
         }
     }
     while let Some(node) = nodes_without_incoming_edge.pop() {
-        sorted_elements.push(node.clone());
+        sorted_elements.push(node);
         if let Some(children) = dag.get(node) {
             for child in children {
                 if let Some(parents) = parents_graph.get_mut(child) {
@@ -719,6 +724,7 @@ mod tests {
 
     #[test]
     fn test_topological_sort() -> Result<(), Error> {
+        let ns: Vec<StackString> = (0..8).map(|i| format!("n{}", i).into()).collect();
         let dependencies = hashmap! {
             "n0".into() => vec!["n1".into(), "n2".into(), "n3".into()],
             "n1".into() => vec!["n4".into(), "n6".into()],
@@ -727,15 +733,8 @@ mod tests {
             "n6".into() => vec!["n7".into()],
             "n7".into() => vec!["n4".into()],
         };
-        let expected: Vec<StackString> = vec![
-            "n0".into(),
-            "n3".into(),
-            "n5".into(),
-            "n2".into(),
-            "n1".into(),
-            "n6".into(),
-            "n7".into(),
-            "n4".into(),
+        let expected: Vec<&StackString> = vec![
+            &ns[0], &ns[3], &ns[5], &ns[2], &ns[1], &ns[6], &ns[7], &ns[4],
         ];
         let result = topological_sort(&dependencies)?;
         assert_eq!(result, expected);

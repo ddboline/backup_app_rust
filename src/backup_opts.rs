@@ -6,6 +6,7 @@ use futures::future::try_join_all;
 use itertools::Itertools;
 use log::{debug, error};
 use stack_string::StackString;
+use std::future::Future;
 use std::{
     collections::{HashMap, HashSet},
     path::{Path, PathBuf},
@@ -659,6 +660,71 @@ impl FromStr for BackupCommand {
     }
 }
 
+struct TaskNode<T>
+where
+    T: Future<Output = Result<(), Error>>,
+{
+    recvs: Vec<Receiver<StackString>>,
+    task: T,
+    sends: Vec<Sender<StackString>>,
+}
+
+impl<T> TaskNode<T>
+where
+    T: Future<Output = Result<(), Error>>,
+{
+    fn new(task: T) -> Self {
+        Self {
+            recvs: Vec::new(),
+            task,
+            sends: Vec::new(),
+        }
+    }
+}
+
+async fn process_tasks<F, T>(
+    dag: &HashMap<StackString, Vec<StackString>>,
+    task: F,
+) -> Result<(), Error>
+where
+    F: Fn(&str) -> T,
+    T: Future<Output = Result<(), Error>>,
+{
+    let sorted_elements = topological_sort(dag)?;
+
+    let mut tasks: HashMap<_, _> = sorted_elements
+        .iter()
+        .map(|element| (*element, TaskNode::new(task(*element))))
+        .collect();
+    for (key, val) in dag {
+        for child in val {
+            let (s, r) = channel(1);
+            tasks.get_mut(key).unwrap().sends.push(s);
+            tasks.get_mut(child).unwrap().recvs.push(r);
+        }
+    }
+
+    let futures = tasks.into_iter().map(|(table, node)| async move {
+        for mut recv in node.recvs {
+            let r = recv
+                .recv()
+                .await
+                .ok_or_else(|| format_err!("Channel dropped"))?;
+            debug!("recv {} {}", r, table);
+        }
+        node.task.await?;
+        for send in node.sends {
+            debug!("send {}", table);
+            send.send(table.clone()).await?;
+        }
+        Ok(())
+    });
+    let results: Result<Vec<_>, Error> = try_join_all(futures).await;
+    results?;
+
+    Ok(())
+}
+
 fn get_parent_graph(
     dag: &HashMap<StackString, Vec<StackString>>,
 ) -> HashMap<&StackString, HashSet<&StackString>> {
@@ -707,8 +773,10 @@ mod tests {
     use anyhow::Error;
     use maplit::hashmap;
     use stack_string::StackString;
+    use std::sync::Arc;
+    use tokio::sync::Mutex;
 
-    use crate::backup_opts::{topological_sort, BackupCommand};
+    use crate::backup_opts::{process_tasks, topological_sort, BackupCommand};
 
     #[test]
     fn test_backupcommand_display() -> Result<(), Error> {
@@ -738,6 +806,31 @@ mod tests {
         ];
         let result = topological_sort(&dependencies)?;
         assert_eq!(result, expected);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_process_tasks() -> Result<(), Error> {
+        let dependencies = hashmap! {
+            "n0".into() => vec!["n1".into(), "n2".into(), "n3".into()],
+            "n1".into() => vec!["n4".into(), "n6".into()],
+            "n2".into() => vec!["n4".into()],
+            "n3".into() => vec!["n5".into(), "n6".into()],
+            "n6".into() => vec!["n7".into()],
+            "n7".into() => vec!["n4".into()],
+        };
+        let tasks: Arc<Mutex<Vec<StackString>>> = Arc::new(Mutex::new(Vec::new()));
+        process_tasks(&dependencies, |t| {
+            let t = t.to_string();
+            let tasks = tasks.clone();
+            async move {
+                tasks.lock().await.push(t.into());
+                Ok(())
+            }
+        })
+        .await?;
+        println!("{:?}", tasks.lock().await);
+        assert_eq!(tasks.lock().await.len(), 8);
         Ok(())
     }
 

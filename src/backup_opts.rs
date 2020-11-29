@@ -6,8 +6,9 @@ use futures::future::try_join_all;
 use itertools::Itertools;
 use log::{debug, error};
 use stack_string::StackString;
+use std::future::Future;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{HashMap, BTreeSet},
     path::{Path, PathBuf},
     process::Stdio,
     str::FromStr,
@@ -150,24 +151,39 @@ async fn process_entry(command: BackupCommand, key: &str, entry: &Entry) -> Resu
                 dependencies,
                 sequences,
             } => {
-                let sorted_tables = if dependencies.is_empty() {
-                    Vec::new()
-                } else {
-                    topological_sort(dependencies).unwrap_or_else(|_| Vec::new())
-                };
-                let sorted_tables = if sorted_tables.is_empty() {
-                    tables.iter().collect()
-                } else {
-                    sorted_tables
-                };
-                for table in sorted_tables.iter().rev() {
-                    clear_table(&database_url, table).await?;
+                let mut full_deps = HashMap::new();
+                for t in tables {
+                    full_deps.insert(t.clone(), BTreeSet::new());
                 }
-                for table in sorted_tables {
+                for t in columns.keys() {
+                    full_deps.insert(t.clone(), BTreeSet::new());
+                }
+                for (k, v) in dependencies {
+                    for child in v {
+                        full_deps.entry(k.clone()).or_default().insert(child.clone());
+                        full_deps.entry(child.clone()).or_default();
+                    }
+                }
+                let parents_graph = get_parent_graph(&full_deps);
+
+                process_tasks(&parents_graph, |t| {
+                    let t = t.to_string();
+                    async move {
+                        clear_table(&database_url, &t).await?;
+                        Ok(())
+                    }
+                }).await?;
+
+                process_tasks(&full_deps, |t| {
                     let empty = Vec::new();
-                    let columns = columns.get(table).unwrap_or(&empty);
-                    restore_table(&database_url, &destination, table, columns).await?;
-                }
+                    let columns = columns.get(t).unwrap_or(&empty).clone();
+                    let t = t.to_string();
+                    async move {
+                        restore_table(&database_url, &destination, &t, &columns).await?;
+                        Ok(())
+                    }
+                }).await?;
+
                 restore_sequences(&database_url, sequences).await?;
                 println!("Finished postgres_retore {}", key);
             }
@@ -659,25 +675,91 @@ impl FromStr for BackupCommand {
     }
 }
 
+struct TaskNode<T>
+where
+    T: Future<Output = Result<(), Error>>,
+{
+    recvs: Vec<Receiver<StackString>>,
+    task: T,
+    sends: Vec<Sender<StackString>>,
+}
+
+impl<T> TaskNode<T>
+where
+    T: Future<Output = Result<(), Error>>,
+{
+    fn new(task: T) -> Self {
+        Self {
+            recvs: Vec::new(),
+            task,
+            sends: Vec::new(),
+        }
+    }
+}
+
+async fn process_tasks<F, T>(
+    dag: &HashMap<impl AsRef<str>, BTreeSet<impl AsRef<str>>>,
+    task: F,
+) -> Result<(), Error>
+where
+    F: Fn(&str) -> T,
+    T: Future<Output = Result<(), Error>>,
+{
+    let mut tasks: HashMap<_, _> = dag
+        .keys()
+        .map(|element| (element.as_ref(), TaskNode::new(task(element.as_ref()))))
+        .collect();
+    println!("{:?}", tasks.keys().join(","));
+    for (key, val) in dag {
+        for child in val {
+            let (s, r) = channel(1);
+            println!("{} {}", key.as_ref(), child.as_ref());
+            tasks.get_mut(key.as_ref()).unwrap().sends.push(s);
+            tasks.get_mut(child.as_ref()).unwrap().recvs.push(r);
+        }
+    }
+
+    let futures = tasks.into_iter().map(|(table, node)| async move {
+        for mut recv in node.recvs {
+            let r = recv
+                .recv()
+                .await
+                .ok_or_else(|| format_err!("Channel dropped"))?;
+            debug!("recv {} {}", r, table);
+        }
+        node.task.await?;
+        for send in node.sends {
+            debug!("send {}", table);
+            send.send(table.into()).await?;
+        }
+        Ok(())
+    });
+    let results: Result<Vec<_>, Error> = try_join_all(futures).await;
+    results?;
+
+    Ok(())
+}
+
 fn get_parent_graph(
-    dag: &HashMap<StackString, Vec<StackString>>,
-) -> HashMap<&StackString, HashSet<&StackString>> {
+    dag: &HashMap<impl AsRef<str>, BTreeSet<impl AsRef<str>>>,
+) -> HashMap<&str, BTreeSet<&str>> {
     dag.iter().fold(HashMap::new(), |mut h, (k, v)| {
         for child in v {
-            h.entry(child).or_default().insert(k);
+            h.entry(child.as_ref()).or_default().insert(k.as_ref());
         }
         h
     })
 }
 
+#[allow(dead_code)]
 fn topological_sort(
-    dag: &HashMap<StackString, Vec<StackString>>,
+    dag: &HashMap<StackString, BTreeSet<StackString>>,
 ) -> Result<Vec<&StackString>, Error> {
-    let mut parents_graph: HashMap<_, HashSet<_>> = get_parent_graph(dag);
+    let mut parents_graph = get_parent_graph(dag);
     let mut sorted_elements = Vec::new();
     let mut nodes_without_incoming_edge = Vec::new();
     for key in dag.keys() {
-        if !parents_graph.contains_key(key) {
+        if !parents_graph.contains_key(key.as_str()) {
             nodes_without_incoming_edge.push(key);
         }
     }
@@ -685,8 +767,8 @@ fn topological_sort(
         sorted_elements.push(node);
         if let Some(children) = dag.get(node) {
             for child in children {
-                if let Some(parents) = parents_graph.get_mut(child) {
-                    parents.remove(node);
+                if let Some(parents) = parents_graph.get_mut(child.as_str()) {
+                    parents.remove(node.as_str());
                     if parents.is_empty() {
                         nodes_without_incoming_edge.push(child);
                     }
@@ -705,10 +787,13 @@ fn topological_sort(
 #[cfg(test)]
 mod tests {
     use anyhow::Error;
-    use maplit::hashmap;
+    use maplit::{hashmap, btreeset};
+    use std::collections::{HashMap, BTreeSet};
     use stack_string::StackString;
+    use std::sync::Arc;
+    use tokio::sync::Mutex;
 
-    use crate::backup_opts::{topological_sort, BackupCommand};
+    use crate::backup_opts::{process_tasks, topological_sort, BackupCommand};
 
     #[test]
     fn test_backupcommand_display() -> Result<(), Error> {
@@ -726,12 +811,14 @@ mod tests {
     fn test_topological_sort() -> Result<(), Error> {
         let ns: Vec<StackString> = (0..8).map(|i| format!("n{}", i).into()).collect();
         let dependencies = hashmap! {
-            "n0".into() => vec!["n1".into(), "n2".into(), "n3".into()],
-            "n1".into() => vec!["n4".into(), "n6".into()],
-            "n2".into() => vec!["n4".into()],
-            "n3".into() => vec!["n5".into(), "n6".into()],
-            "n6".into() => vec!["n7".into()],
-            "n7".into() => vec!["n4".into()],
+            "n0".into() => btreeset!["n1".into(), "n2".into(), "n3".into()],
+            "n1".into() => btreeset!["n4".into(), "n6".into()],
+            "n2".into() => btreeset!["n4".into()],
+            "n3".into() => btreeset!["n5".into(), "n6".into()],
+            "n4".into() => BTreeSet::new(),
+            "n5".into() => BTreeSet::new(),
+            "n6".into() => btreeset!["n7".into()],
+            "n7".into() => btreeset!["n4".into()],
         };
         let expected: Vec<&StackString> = vec![
             &ns[0], &ns[3], &ns[5], &ns[2], &ns[1], &ns[6], &ns[7], &ns[4],
@@ -741,15 +828,43 @@ mod tests {
         Ok(())
     }
 
+    #[tokio::test]
+    async fn test_process_tasks() -> Result<(), Error> {
+        let dependencies: HashMap<StackString, BTreeSet<StackString>> = hashmap! {
+            "n0".into() => btreeset!["n1".into(), "n2".into(), "n3".into()],
+            "n1".into() => btreeset!["n4".into(), "n6".into()],
+            "n2".into() => btreeset!["n4".into()],
+            "n3".into() => btreeset!["n5".into(), "n6".into()],
+            "n4".into() => BTreeSet::new(),
+            "n5".into() => BTreeSet::new(),
+            "n6".into() => btreeset!["n7".into()],
+            "n7".into() => btreeset!["n4".into()],
+        };
+        let tasks: Arc<Mutex<Vec<StackString>>> = Arc::new(Mutex::new(Vec::new()));
+        process_tasks(&dependencies, |t| {
+            let t = t.to_string();
+            let tasks = tasks.clone();
+            async move {
+                tasks.lock().await.push(t.into());
+                Ok(())
+            }
+        })
+        .await?;
+        println!("{:?}", tasks.lock().await);
+        assert_eq!(tasks.lock().await.len(), 8);
+        Ok(())
+    }
+
     #[test]
     fn test_topological_sort_cycle() -> Result<(), Error> {
         let deps = hashmap! {
-            "n0".into() => vec!["n1".into(), "n2".into(), "n3".into()],
-            "n1".into() => vec!["n4".into(), "n6".into()],
-            "n2".into() => vec!["n4".into()],
-            "n3".into() => vec!["n5".into(), "n6".into()],
-            "n4".into() => vec!["n6".into()],
-            "n6".into() => vec!["n1".into()],
+            "n0".into() => btreeset!["n1".into(), "n2".into(), "n3".into()],
+            "n1".into() => btreeset!["n4".into(), "n6".into()],
+            "n2".into() => btreeset!["n4".into()],
+            "n3".into() => btreeset!["n5".into(), "n6".into()],
+            "n4".into() => btreeset!["n6".into()],
+            "n5".into() => BTreeSet::new(),
+            "n6".into() => btreeset!["n1".into()],
         };
         let result = topological_sort(&deps);
         assert!(result.is_err());

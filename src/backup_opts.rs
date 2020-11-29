@@ -8,7 +8,7 @@ use log::{debug, error};
 use stack_string::StackString;
 use std::future::Future;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{HashMap, BTreeSet},
     path::{Path, PathBuf},
     process::Stdio,
     str::FromStr,
@@ -153,10 +153,10 @@ async fn process_entry(command: BackupCommand, key: &str, entry: &Entry) -> Resu
             } => {
                 let mut full_deps = HashMap::new();
                 for t in tables {
-                    full_deps.insert(t.clone(), HashSet::new());
+                    full_deps.insert(t.clone(), BTreeSet::new());
                 }
                 for t in columns.keys() {
-                    full_deps.insert(t.clone(), HashSet::new());
+                    full_deps.insert(t.clone(), BTreeSet::new());
                 }
                 for (k, v) in dependencies {
                     for child in v {
@@ -698,7 +698,7 @@ where
 }
 
 async fn process_tasks<F, T>(
-    dag: &HashMap<impl AsRef<str>, HashSet<impl AsRef<str>>>,
+    dag: &HashMap<impl AsRef<str>, BTreeSet<impl AsRef<str>>>,
     task: F,
 ) -> Result<(), Error>
 where
@@ -741,8 +741,8 @@ where
 }
 
 fn get_parent_graph(
-    dag: &HashMap<impl AsRef<str>, HashSet<impl AsRef<str>>>,
-) -> HashMap<&str, HashSet<&str>> {
+    dag: &HashMap<impl AsRef<str>, BTreeSet<impl AsRef<str>>>,
+) -> HashMap<&str, BTreeSet<&str>> {
     dag.iter().fold(HashMap::new(), |mut h, (k, v)| {
         for child in v {
             h.entry(child.as_ref()).or_default().insert(k.as_ref());
@@ -753,7 +753,7 @@ fn get_parent_graph(
 
 #[allow(dead_code)]
 fn topological_sort(
-    dag: &HashMap<StackString, HashSet<StackString>>,
+    dag: &HashMap<StackString, BTreeSet<StackString>>,
 ) -> Result<Vec<&StackString>, Error> {
     let mut parents_graph = get_parent_graph(dag);
     let mut sorted_elements = Vec::new();
@@ -787,8 +787,8 @@ fn topological_sort(
 #[cfg(test)]
 mod tests {
     use anyhow::Error;
-    use maplit::{hashmap, hashset};
-    use std::collections::{HashMap, HashSet};
+    use maplit::{hashmap, btreeset};
+    use std::collections::{HashMap, BTreeSet};
     use stack_string::StackString;
     use std::sync::Arc;
     use tokio::sync::Mutex;
@@ -811,14 +811,14 @@ mod tests {
     fn test_topological_sort() -> Result<(), Error> {
         let ns: Vec<StackString> = (0..8).map(|i| format!("n{}", i).into()).collect();
         let dependencies = hashmap! {
-            "n0".into() => hashset!["n1".into(), "n2".into(), "n3".into()],
-            "n1".into() => hashset!["n4".into(), "n6".into()],
-            "n2".into() => hashset!["n4".into()],
-            "n3".into() => hashset!["n5".into(), "n6".into()],
-            "n4".into() => HashSet::new(),
-            "n5".into() => HashSet::new(),
-            "n6".into() => hashset!["n7".into()],
-            "n7".into() => hashset!["n4".into()],
+            "n0".into() => btreeset!["n1".into(), "n2".into(), "n3".into()],
+            "n1".into() => btreeset!["n4".into(), "n6".into()],
+            "n2".into() => btreeset!["n4".into()],
+            "n3".into() => btreeset!["n5".into(), "n6".into()],
+            "n4".into() => BTreeSet::new(),
+            "n5".into() => BTreeSet::new(),
+            "n6".into() => btreeset!["n7".into()],
+            "n7".into() => btreeset!["n4".into()],
         };
         let expected: Vec<&StackString> = vec![
             &ns[0], &ns[3], &ns[5], &ns[2], &ns[1], &ns[6], &ns[7], &ns[4],
@@ -830,15 +830,15 @@ mod tests {
 
     #[tokio::test]
     async fn test_process_tasks() -> Result<(), Error> {
-        let dependencies: HashMap<StackString, HashSet<StackString>> = hashmap! {
-            "n0".into() => hashset!["n1".into(), "n2".into(), "n3".into()],
-            "n1".into() => hashset!["n4".into(), "n6".into()],
-            "n2".into() => hashset!["n4".into()],
-            "n3".into() => hashset!["n5".into(), "n6".into()],
-            "n4".into() => HashSet::new(),
-            "n5".into() => HashSet::new(),
-            "n6".into() => hashset!["n7".into()],
-            "n7".into() => hashset!["n4".into()],
+        let dependencies: HashMap<StackString, BTreeSet<StackString>> = hashmap! {
+            "n0".into() => btreeset!["n1".into(), "n2".into(), "n3".into()],
+            "n1".into() => btreeset!["n4".into(), "n6".into()],
+            "n2".into() => btreeset!["n4".into()],
+            "n3".into() => btreeset!["n5".into(), "n6".into()],
+            "n4".into() => BTreeSet::new(),
+            "n5".into() => BTreeSet::new(),
+            "n6".into() => btreeset!["n7".into()],
+            "n7".into() => btreeset!["n4".into()],
         };
         let tasks: Arc<Mutex<Vec<StackString>>> = Arc::new(Mutex::new(Vec::new()));
         process_tasks(&dependencies, |t| {
@@ -858,13 +858,13 @@ mod tests {
     #[test]
     fn test_topological_sort_cycle() -> Result<(), Error> {
         let deps = hashmap! {
-            "n0".into() => hashset!["n1".into(), "n2".into(), "n3".into()],
-            "n1".into() => hashset!["n4".into(), "n6".into()],
-            "n2".into() => hashset!["n4".into()],
-            "n3".into() => hashset!["n5".into(), "n6".into()],
-            "n4".into() => hashset!["n6".into()],
-            "n5".into() => HashSet::new(),
-            "n6".into() => hashset!["n1".into()],
+            "n0".into() => btreeset!["n1".into(), "n2".into(), "n3".into()],
+            "n1".into() => btreeset!["n4".into(), "n6".into()],
+            "n2".into() => btreeset!["n4".into()],
+            "n3".into() => btreeset!["n5".into(), "n6".into()],
+            "n4".into() => btreeset!["n6".into()],
+            "n5".into() => BTreeSet::new(),
+            "n6".into() => btreeset!["n1".into()],
         };
         let result = topological_sort(&deps);
         assert!(result.is_err());

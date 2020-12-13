@@ -11,6 +11,7 @@ use s3_ext::S3Ext;
 use std::{fmt, path::Path};
 use sts_profile_auth::get_client_sts;
 use url::Url;
+use tokio_compat_02::FutureExt;
 
 lazy_static! {
     static ref S3INSTANCE_TEST_MUTEX: Mutex<()> = Mutex::new(());
@@ -62,7 +63,7 @@ impl S3Instance {
     pub async fn get_list_of_buckets(&self) -> Result<Vec<Bucket>, Error> {
         exponential_retry(|| async move {
             self.s3_client
-                .list_buckets()
+                .list_buckets().compat()
                 .await
                 .map(|l| l.buckets.unwrap_or_default())
                 .map_err(Into::into)
@@ -78,7 +79,7 @@ impl S3Instance {
             };
             async move {
                 self.s3_client
-                    .create_bucket(req)
+                    .create_bucket(req).compat()
                     .await?
                     .location
                     .ok_or_else(|| format_err!("Failed to create bucket"))
@@ -92,7 +93,7 @@ impl S3Instance {
             let req = DeleteBucketRequest {
                 bucket: bucket_name.to_string(),
             };
-            async move { self.s3_client.delete_bucket(req).await.map_err(Into::into) }
+            async move { self.s3_client.delete_bucket(req).compat().await.map_err(Into::into) }
         })
         .await
     }
@@ -106,7 +107,7 @@ impl S3Instance {
             };
             async move {
                 self.s3_client
-                    .delete_object(req)
+                    .delete_object(req).compat()
                     .await
                     .map(|_| ())
                     .map_err(Into::into)
@@ -129,7 +130,7 @@ impl S3Instance {
                 key: key_to.to_string(),
                 ..CopyObjectRequest::default()
             };
-            async move { self.s3_client.copy_object(req).await.map_err(Into::into) }
+            async move { self.s3_client.copy_object(req).compat().await.map_err(Into::into) }
         })
         .await
         .map(|x| x.copy_object_result.and_then(|s| s.e_tag))
@@ -153,7 +154,7 @@ impl S3Instance {
             };
             async move {
                 self.s3_client
-                    .upload_from_file(fname, req)
+                    .upload_from_file(fname, req).compat()
                     .await
                     .map(|_| ())
                     .map_err(Into::into)
@@ -176,7 +177,7 @@ impl S3Instance {
             };
             async move {
                 self.s3_client
-                    .download_to_file(req, fname)
+                    .download_to_file(req, fname).compat()
                     .await
                     .map(|x| x.e_tag.as_ref().map_or("", |y| y.trim_matches('"')).into())
                     .map_err(Into::into)
@@ -196,8 +197,8 @@ impl S3Instance {
                 None => self.s3_client.stream_objects(bucket),
             };
             let results: Result<Vec<_>, _> = match self.max_keys {
-                Some(nkeys) => stream.take(nkeys).try_collect().await,
-                None => stream.try_collect().await,
+                Some(nkeys) => stream.take(nkeys).try_collect().compat().await,
+                None => stream.try_collect().compat().await,
             };
             results.map_err(Into::into)
         })
@@ -218,7 +219,7 @@ impl S3Instance {
             None => self.s3_client.stream_objects(bucket),
         };
         let mut nkeys = 0;
-        while let Some(item) = stream.next().await {
+        while let Some(item) = stream.next().compat().await {
             callback(&item?)?;
             nkeys += 1;
             if let Some(keys) = self.max_keys {

@@ -171,7 +171,6 @@ async fn process_entry(command: BackupCommand, key: &str, entry: &Entry) -> Resu
                         parents_graph.entry(t.as_str()).or_default();
                     }
                 }
-                let parents_graph = get_parent_graph(&full_deps);
 
                 process_tasks(&full_deps, |t| {
                     let t = t.to_string();

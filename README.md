@@ -26,13 +26,16 @@ There are three types of backups that can be configured:
 [<entry name>]
 destination = 'PATH WHERE BACKUP SHOULD GO'
 backup_paths = ['LIST OF PATHS TO BE BACKED UP (inputs to tar)']
-exclude = ['LIST OF PATHS TO EXCLUDE (the --exclude option in tar)]
+exclude = ['LIST OF PATHS TO EXCLUDE (the --exclude option in tar)']
+```
+
 2. Full backup of postgres, i.e:
 ```toml
 [<entry name>]
 full_postgres_backup = true
 destination = 'PATH WHERE BACKUP SHOULD GO'
 ```
+
 3. Backup of individual postgres database, i.e.:
 ```toml
 [<entry name>]

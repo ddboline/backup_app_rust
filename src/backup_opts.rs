@@ -164,9 +164,10 @@ async fn process_entry(command: BackupCommand, key: &str, entry: &Entry) -> Resu
                         full_deps.entry(child.clone()).or_default();
                     }
                 }
+
                 let parents_graph = get_parent_graph(&full_deps);
 
-                process_tasks(&parents_graph, |t| {
+                process_tasks(&full_deps, |t| {
                     let t = t.to_string();
                     async move {
                         clear_table(&database_url, &t).await?;
@@ -174,7 +175,9 @@ async fn process_entry(command: BackupCommand, key: &str, entry: &Entry) -> Resu
                     }
                 }).await?;
 
-                process_tasks(&full_deps, |t| {
+                println!("finished clearing");
+
+                process_tasks(&parents_graph, |t| {
                     let empty = Vec::new();
                     let columns = columns.get(t).unwrap_or(&empty).clone();
                     let t = t.to_string();
@@ -185,7 +188,7 @@ async fn process_entry(command: BackupCommand, key: &str, entry: &Entry) -> Resu
                 }).await?;
 
                 restore_sequences(&database_url, sequences).await?;
-                println!("Finished postgres_retore {}", key);
+                println!("Finished postgres_restore {}", key);
             }
             Entry::Local {
                 require_sudo,
@@ -744,6 +747,7 @@ fn get_parent_graph(
     dag: &HashMap<impl AsRef<str>, BTreeSet<impl AsRef<str>>>,
 ) -> HashMap<&str, BTreeSet<&str>> {
     dag.iter().fold(HashMap::new(), |mut h, (k, v)| {
+        h.entry(k.as_ref()).or_default();
         for child in v {
             h.entry(child.as_ref()).or_default().insert(k.as_ref());
         }

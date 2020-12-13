@@ -375,6 +375,40 @@ mod tests {
             ..EntryToml::default()
         };
 
+        let database_url: UrlWrapper = "postgresql://user:password@localhost:5432/movie_queue".try_into()?;
+        let tables = vec![
+            "imdb_ratings".into(),
+            "imdb_episodes".into(),
+            "movie_collection_on_dvd".into(),
+            "movie_collection".into(),
+            "movie_queue".into(),
+            "trakt_watched_episodes".into(),
+            "trakt_watched_movies".into(),
+            "trakt_watchlist".into(),
+        ];
+        let destination = "s3://movie-queue-db-backup".try_into()?;
+        let sequences = hashmap! {
+            "imdb_ratings_id_seq".into() => ("imdb_ratings".into(), "index".into()),
+            "imdb_episodes_id_seq".into() => ("imdb_episodes".into(), "id".into()),
+            "trakt_watched_episodes_id_seq".into() => ("trakt_watched_episodes".into(), "id".into()),
+            "trakt_watched_movies_id_seq".into() => ("trakt_watched_movies".into(), "id".into()),
+            "trakt_watchlist_id_seq".into() => ("trakt_watchlist".into(), "id".into()),
+        };
+        let dependencies = hashmap! {
+            "imdb_episodes".into() => vec!["imdb_ratings".into()],
+            "movie_collection".into() => vec!["imdb_ratings".into()],
+            "movie_queue".into() => vec!["movie_collection".into()],
+        };
+        let movie_entry = EntryToml {
+            database_url: Some(database_url),
+            tables: Some(tables),
+            destination: Some(destination),
+            sequences: Some(sequences),
+            dependencies: Some(dependencies),
+            ..EntryToml::default()
+        };
+
+
         let date = Utc::now().format("%Y%m%d").to_string();
         let sysid: Vec<u8> = std::process::Command::new("uname")
             .args(&["-snrmpio"])
@@ -408,6 +442,7 @@ mod tests {
             "Dropbox".into() => local_entry,
             "aws_app_rust".into() => aws_entry,
             "calendar_app_rust".into() => calendar_entry,
+            "movie_collection_rust".into() => movie_entry,
         };
         println!("{}", toml::to_string_pretty(&entries)?);
         let config: Config = entries.try_into()?;

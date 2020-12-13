@@ -156,7 +156,7 @@ async fn process_entry(command: BackupCommand, key: &str, entry: &Entry) -> Resu
                     full_deps.insert(t.clone(), BTreeSet::new());
                 }
                 for t in columns.keys() {
-                    full_deps.insert(t.clone(), BTreeSet::new());
+                    full_deps.entry(t.clone()).or_default();
                 }
                 for (k, v) in dependencies {
                     for child in v {
@@ -164,9 +164,16 @@ async fn process_entry(command: BackupCommand, key: &str, entry: &Entry) -> Resu
                         full_deps.entry(child.clone()).or_default();
                     }
                 }
+
+                let mut parents_graph = get_parent_graph(&full_deps);
+                for t in full_deps.keys() {
+                    if !parents_graph.contains_key(t.as_str()) {
+                        parents_graph.entry(t.as_str()).or_default();
+                    }
+                }
                 let parents_graph = get_parent_graph(&full_deps);
 
-                process_tasks(&parents_graph, |t| {
+                process_tasks(&full_deps, |t| {
                     let t = t.to_string();
                     async move {
                         clear_table(&database_url, &t).await?;
@@ -174,7 +181,9 @@ async fn process_entry(command: BackupCommand, key: &str, entry: &Entry) -> Resu
                     }
                 }).await?;
 
-                process_tasks(&full_deps, |t| {
+                println!("finished clearing");
+
+                process_tasks(&parents_graph, |t| {
                     let empty = Vec::new();
                     let columns = columns.get(t).unwrap_or(&empty).clone();
                     let t = t.to_string();
@@ -185,7 +194,7 @@ async fn process_entry(command: BackupCommand, key: &str, entry: &Entry) -> Resu
                 }).await?;
 
                 restore_sequences(&database_url, sequences).await?;
-                println!("Finished postgres_retore {}", key);
+                println!("Finished postgres_restore {}", key);
             }
             Entry::Local {
                 require_sudo,

@@ -156,7 +156,7 @@ async fn process_entry(command: BackupCommand, key: &str, entry: &Entry) -> Resu
                     full_deps.insert(t.clone(), BTreeSet::new());
                 }
                 for t in columns.keys() {
-                    full_deps.insert(t.clone(), BTreeSet::new());
+                    full_deps.entry(t.clone()).or_default();
                 }
                 for (k, v) in dependencies {
                     for child in v {
@@ -165,6 +165,12 @@ async fn process_entry(command: BackupCommand, key: &str, entry: &Entry) -> Resu
                     }
                 }
 
+                let mut parents_graph = get_parent_graph(&full_deps);
+                for t in full_deps.keys() {
+                    if !parents_graph.contains_key(t.as_str()) {
+                        parents_graph.entry(t.as_str()).or_default();
+                    }
+                }
                 let parents_graph = get_parent_graph(&full_deps);
 
                 process_tasks(&full_deps, |t| {
@@ -747,7 +753,6 @@ fn get_parent_graph(
     dag: &HashMap<impl AsRef<str>, BTreeSet<impl AsRef<str>>>,
 ) -> HashMap<&str, BTreeSet<&str>> {
     dag.iter().fold(HashMap::new(), |mut h, (k, v)| {
-        h.entry(k.as_ref()).or_default();
         for child in v {
             h.entry(child.as_ref()).or_default().insert(k.as_ref());
         }

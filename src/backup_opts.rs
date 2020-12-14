@@ -6,9 +6,9 @@ use futures::future::try_join_all;
 use itertools::Itertools;
 use log::{debug, error};
 use stack_string::StackString;
-use std::future::Future;
 use std::{
-    collections::{HashMap, BTreeSet},
+    collections::{BTreeSet, HashMap},
+    future::Future,
     path::{Path, PathBuf},
     process::Stdio,
     str::FromStr,
@@ -160,7 +160,10 @@ async fn process_entry(command: BackupCommand, key: &str, entry: &Entry) -> Resu
                 }
                 for (k, v) in dependencies {
                     for child in v {
-                        full_deps.entry(k.clone()).or_default().insert(child.clone());
+                        full_deps
+                            .entry(k.clone())
+                            .or_default()
+                            .insert(child.clone());
                         full_deps.entry(child.clone()).or_default();
                     }
                 }
@@ -178,7 +181,8 @@ async fn process_entry(command: BackupCommand, key: &str, entry: &Entry) -> Resu
                         clear_table(&database_url, &t).await?;
                         Ok(())
                     }
-                }).await?;
+                })
+                .await?;
 
                 println!("finished clearing");
 
@@ -190,7 +194,8 @@ async fn process_entry(command: BackupCommand, key: &str, entry: &Entry) -> Resu
                         restore_table(&database_url, &destination, &t, &columns).await?;
                         Ok(())
                     }
-                }).await?;
+                })
+                .await?;
 
                 restore_sequences(&database_url, sequences).await?;
                 println!("Finished postgres_restore {}", key);
@@ -795,10 +800,12 @@ fn topological_sort(
 #[cfg(test)]
 mod tests {
     use anyhow::Error;
-    use maplit::{hashmap, btreeset};
-    use std::collections::{HashMap, BTreeSet};
+    use maplit::{btreeset, hashmap};
     use stack_string::StackString;
-    use std::sync::Arc;
+    use std::{
+        collections::{BTreeSet, HashMap},
+        sync::Arc,
+    };
     use tokio::sync::Mutex;
 
     use crate::backup_opts::{process_tasks, topological_sort, BackupCommand};

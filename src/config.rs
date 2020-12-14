@@ -375,7 +375,8 @@ mod tests {
             ..EntryToml::default()
         };
 
-        let database_url: UrlWrapper = "postgresql://user:password@localhost:5432/movie_queue".try_into()?;
+        let database_url: UrlWrapper =
+            "postgresql://user:password@localhost:5432/movie_queue".try_into()?;
         let tables = vec![
             "imdb_ratings".into(),
             "imdb_episodes".into(),
@@ -407,7 +408,6 @@ mod tests {
             dependencies: Some(dependencies),
             ..EntryToml::default()
         };
-
 
         let date = Utc::now().format("%Y%m%d").to_string();
         let sysid: Vec<u8> = std::process::Command::new("uname")

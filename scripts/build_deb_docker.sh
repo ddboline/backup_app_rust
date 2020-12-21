@@ -7,5 +7,5 @@ RELEASE="$2"
 
 cargo build --release
 
-printf "Authentication service using actix\n" > description-pak
+printf "Backup utility written in rust\n" > description-pak
 checkinstall --pkgversion ${VERSION} --pkgrelease ${RELEASE} -y

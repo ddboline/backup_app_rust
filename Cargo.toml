@@ -1,11 +1,16 @@
 [package]
 name = "backup_app_rust"
-version = "0.1.12"
+version = "0.1.13"
 authors = ["Daniel Boline <ddboline@gmail.com>"]
 edition = "2018"
 
 [package.metadata.deb]
 name = "backup-app-rust"
+priority = "optional"
+section = "rust"
+provides = "backup-app-rust"
+extended-description = """\
+Backup utility written in rust"""
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -31,7 +36,7 @@ tokio-compat-02 = "0.1"
 log = "0.4"
 env_logger = "0.8"
 tempfile = "3.1"
-rand = "0.7"
+rand = "0.8"
 futures = "0.3"
 rusoto_core = {version = "0.45", default_features = false, features=["rustls"]}
 rusoto_s3 = {version = "0.45", default_features = false, features=["rustls"]}
@@ -39,7 +44,7 @@ s3-ext = "0.1"
 sts_profile_auth = "0.5"
 parking_lot = "0.11"
 num_cpus = "1.13"
-stack-string = { git = "https://github.com/ddboline/stack-string-rs.git", tag="0.1.9", features=["diesel_types"] }
+stack-string = { git = "https://github.com/ddboline/stack-string-rs.git", tag="0.1.10", features=["diesel_types"] }
 
 [[bin]]
 name = "backup-app-rust"

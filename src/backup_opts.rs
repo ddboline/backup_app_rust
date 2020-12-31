@@ -23,7 +23,7 @@ use tokio::{
     process::Command,
     sync::mpsc::{
         channel,
-        error::{TryRecvError, TrySendError},
+        error::TrySendError,
         Receiver, Sender,
     },
     task::{spawn, JoinHandle},
@@ -35,7 +35,7 @@ use crate::{
     s3_instance::S3Instance,
 };
 
-fn spawn_blocking<F, R>(f: F) -> oneshot::Receiver<R>
+fn spawn_threadpool<F, R>(f: F) -> oneshot::Receiver<R>
 where
     F: FnOnce() -> R + Send + 'static,
     R: Send + 'static + std::fmt::Debug,
@@ -572,7 +572,7 @@ async fn input_from_gz_file(
 ) -> Result<(), Error> {
     let (send, mut recv) = channel(1);
     let input_path = input_path.as_ref().to_path_buf();
-    let gz_task = spawn_blocking(move || read_from_gzip(&input_path, &send));
+    let gz_task = spawn_threadpool(move || read_from_gzip(&input_path, &send));
 
     while let Some(buf) = recv.recv().await {
         writer.write_all(&buf).await?;
@@ -637,7 +637,7 @@ async fn output_to_gz_file(
 ) -> Result<(), Error> {
     let (send, recv) = channel(1);
     let output_path = output_path.as_ref().to_path_buf();
-    let gz_task = spawn_blocking(move || write_to_gzip(&output_path, recv));
+    let gz_task = spawn_threadpool(move || write_to_gzip(&output_path, recv));
 
     loop {
         let mut buf = Vec::with_capacity(4096);
@@ -654,7 +654,7 @@ async fn output_to_gz_file(
 }
 
 fn write_to_gzip(output_path: &Path, mut recv: Receiver<Vec<u8>>) -> Result<(), Error> {
-    use std::{fs::File, io::Write, thread::sleep, time::Duration};
+    use std::{fs::File, io::Write};
 
     let file_name = output_path
         .file_name()
@@ -666,16 +666,11 @@ fn write_to_gzip(output_path: &Path, mut recv: Receiver<Vec<u8>>) -> Result<(), 
         .filename(file_name)
         .write(output_file, Compression::default());
     loop {
-        match recv.try_recv() {
-            Ok(buf) => {
+        match recv.blocking_recv() {
+            Some(buf) => {
                 gz.write_all(&buf)?;
-            }
-            Err(TryRecvError::Closed) => {
-                break;
-            }
-            Err(TryRecvError::Empty) => {
-                sleep(Duration::from_millis(100));
-            }
+            },
+            None => break,
         }
     }
     gz.try_finish()?;

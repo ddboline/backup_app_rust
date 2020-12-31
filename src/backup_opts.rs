@@ -16,15 +16,13 @@ use std::{
 };
 use structopt::StructOpt;
 use tempfile::NamedTempFile;
-use tokio::sync::oneshot;
 use tokio::{
     fs::File,
     io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWriteExt, BufReader},
     process::Command,
-    sync::mpsc::{
-        channel,
-        error::TrySendError,
-        Receiver, Sender,
+    sync::{
+        mpsc::{channel, error::TrySendError, Receiver, Sender},
+        oneshot,
     },
     task::{spawn, JoinHandle},
 };
@@ -669,7 +667,7 @@ fn write_to_gzip(output_path: &Path, mut recv: Receiver<Vec<u8>>) -> Result<(), 
         match recv.blocking_recv() {
             Some(buf) => {
                 gz.write_all(&buf)?;
-            },
+            }
             None => break,
         }
     }

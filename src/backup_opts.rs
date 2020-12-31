@@ -16,6 +16,7 @@ use std::{
 };
 use structopt::StructOpt;
 use tempfile::NamedTempFile;
+use tokio::sync::oneshot;
 use tokio::{
     fs::File,
     io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWriteExt, BufReader},
@@ -25,7 +26,7 @@ use tokio::{
         error::{TryRecvError, TrySendError},
         Receiver, Sender,
     },
-    task::{spawn, spawn_blocking, JoinHandle},
+    task::{spawn, JoinHandle},
 };
 use url::Url;
 
@@ -33,6 +34,18 @@ use crate::{
     config::{Config, Entry},
     s3_instance::S3Instance,
 };
+
+fn spawn_blocking<F, R>(f: F) -> oneshot::Receiver<R>
+where
+    F: FnOnce() -> R + Send + 'static,
+    R: Send + 'static + std::fmt::Debug,
+{
+    let (send, recv) = oneshot::channel();
+    rayon::spawn(move || {
+        send.send(f()).unwrap();
+    });
+    recv
+}
 
 #[derive(StructOpt)]
 pub struct BackupOpts {
@@ -58,6 +71,9 @@ impl BackupOpts {
         let queue: Arc<Queue<Option<(BackupCommand, StackString, Entry)>>> = Arc::new(Queue::new());
         let config = Config::new(&opts.config_file)?;
         let num_workers = opts.num_workers.unwrap_or_else(num_cpus::get);
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(num_workers * 2)
+            .build_global()?;
         let worker_tasks: Vec<_> = (0..num_workers)
             .map(|_| {
                 let queue = queue.clone();

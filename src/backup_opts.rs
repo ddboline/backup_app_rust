@@ -663,13 +663,8 @@ fn write_to_gzip(output_path: &Path, mut recv: Receiver<Vec<u8>>) -> Result<(), 
     let mut gz = GzBuilder::new()
         .filename(file_name)
         .write(output_file, Compression::default());
-    loop {
-        match recv.blocking_recv() {
-            Some(buf) => {
-                gz.write_all(&buf)?;
-            }
-            None => break,
-        }
+    while let Some(buf) = recv.blocking_recv() {
+        gz.write_all(&buf)?;
     }
     gz.try_finish()?;
     Ok(())

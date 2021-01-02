@@ -1,6 +1,6 @@
 [aws_app_rust]
 database_url = 'postgresql://user:password@localhost:5432/aws_app_cache'
-destination = 's3://aws-app-rust-db-backup'
+destination = 'file:///tmp/aws-app-rust-db-backup'
 tables = [
     'instance_family',
     'instance_list',
@@ -14,7 +14,7 @@ instance_family = ["id", "family_name"]
 
 [calendar_app_rust]
 database_url = 'postgresql://user:password@localhost:5432/calendar_app_cache'
-destination = 's3://calendar-app-rust-db-backup'
+destination = 'file:///tmp/calendar-app-rust-db-backup'
 tables = [
     'calendar_cache',
     'calendar_list',
@@ -22,7 +22,7 @@ tables = [
 
 [movie_collection_rust]
 database_url = 'postgresql://user:password@localhost:5432/movie_queue'
-destination = 's3://movie-queue-db-backup'
+destination = 'file:///tmp/movie-queue-db-backup'
 tables = [
     'imdb_ratings',
     'imdb_episodes',

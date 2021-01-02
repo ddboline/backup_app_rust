@@ -24,7 +24,6 @@ jobs:
 
     - name: Run tests / generate code coverage
       run: |
-        mkdir -p ${HOME}/Dropbox
         cargo test --verbose && \
         cargo install cargo-tarpaulin && \
         cargo tarpaulin --verbose --all-features --workspace --out Xml

@@ -338,6 +338,7 @@ mod tests {
     use chrono::Utc;
     use maplit::hashmap;
     use std::convert::TryInto;
+    use std::fs::{create_dir_all, remove_dir_all};
 
     use crate::config::{Config, ConfigToml, EntryToml, UrlWrapper};
 
@@ -423,7 +424,9 @@ mod tests {
         let sysid = String::from_utf8(sysid)?;
         let sysid = format!("{}_{}", sysid, date);
 
-        let backup_paths = vec![home_dir.join("Dropbox")];
+        create_dir_all(home_dir.join("test_backup_app"))?;
+
+        let backup_paths = vec![home_dir.join("test_backup_app")];
         let destination = format!(
             "file://{}/temp_{}_{}.tar.gz",
             home_dir.to_string_lossy(),
@@ -439,7 +442,7 @@ mod tests {
             ..EntryToml::default()
         };
         let entries = hashmap! {
-            "Dropbox".into() => local_entry,
+            "test_backup_app".into() => local_entry,
             "aws_app_rust".into() => aws_entry,
             "calendar_app_rust".into() => calendar_entry,
             "movie_collection_rust".into() => movie_entry,
@@ -456,6 +459,9 @@ mod tests {
         let config_file: Config = config_file.try_into()?;
         println!("{}", config_file);
         assert_eq!(config_file, config);
+
+        create_dir_all(home_dir.join("test_backup_app"))?;
+
         Ok(())
     }
 }

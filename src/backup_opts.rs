@@ -45,9 +45,34 @@ where
     recv
 }
 
+#[derive(Display, Clone, Copy)]
+pub enum BackupCommand {
+    #[display(fmt = "list")]
+    List,
+    #[display(fmt = "backup")]
+    Backup,
+    #[display(fmt = "restore")]
+    Restore,
+    #[display(fmt = "clear")]
+    Clear,
+}
+
+impl FromStr for BackupCommand {
+    type Err = Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "list" => Ok(Self::List),
+            "backup" => Ok(Self::Backup),
+            "restore" => Ok(Self::Restore),
+            "clear" => Ok(Self::Clear),
+            _ => Err(format_err!("Invalid command")),
+        }
+    }
+}
+
 #[derive(StructOpt)]
 pub struct BackupOpts {
-    /// list, backup, restore
+    /// list, backup, restore, clear
     pub command: BackupCommand,
     #[structopt(short = "f", long)]
     pub config_file: PathBuf,
@@ -165,22 +190,7 @@ async fn process_entry(command: BackupCommand, key: &str, entry: &Entry) -> Resu
                 dependencies,
                 sequences,
             } => {
-                let mut full_deps = HashMap::new();
-                for t in tables {
-                    full_deps.insert(t.clone(), BTreeSet::new());
-                }
-                for t in columns.keys() {
-                    full_deps.entry(t.clone()).or_default();
-                }
-                for (k, v) in dependencies {
-                    for child in v {
-                        full_deps
-                            .entry(k.clone())
-                            .or_default()
-                            .insert(child.clone());
-                        full_deps.entry(child.clone()).or_default();
-                    }
-                }
+                let full_deps = get_full_deps(tables, columns.keys(), dependencies);
 
                 let mut parents_graph = get_parent_graph(&full_deps);
                 for t in full_deps.keys() {
@@ -223,8 +233,55 @@ async fn process_entry(command: BackupCommand, key: &str, entry: &Entry) -> Resu
                 println!("Finished local_restore {}", key);
             }
         },
+        BackupCommand::Clear => match entry {
+            Entry::Postgres {
+                database_url,
+                tables,
+                columns,
+                dependencies,
+                ..
+            } => {
+                let full_deps = get_full_deps(tables, columns.keys(), dependencies);
+
+                process_tasks(&full_deps, |t| {
+                    let t = t.to_string();
+                    async move {
+                        clear_table(&database_url, &t).await?;
+                        Ok(())
+                    }
+                })
+                .await?;
+
+                println!("finished clearing");
+            }
+            _ => {}
+        },
     };
     Ok(())
+}
+
+fn get_full_deps(
+    tables: impl IntoIterator<Item=impl AsRef<str>>,
+    columns: impl Iterator<Item = impl AsRef<str>>,
+    dependencies: impl IntoIterator<Item = (impl AsRef<str>, impl IntoIterator<Item = impl AsRef<str>>)>,
+) -> HashMap<StackString, BTreeSet<StackString>> {
+    let mut full_deps: HashMap<StackString, BTreeSet<StackString>> = HashMap::new();
+    for t in tables {
+        full_deps.insert(t.as_ref().into(), BTreeSet::new());
+    }
+    for t in columns {
+        full_deps.entry(t.as_ref().into()).or_default();
+    }
+    for (k, v) in dependencies {
+        for child in v {
+            full_deps
+                .entry(k.as_ref().into())
+                .or_default()
+                .insert(child.as_ref().into());
+            full_deps.entry(child.as_ref().into()).or_default();
+        }
+    }
+    full_deps
 }
 
 async fn run_local_backup(
@@ -668,28 +725,6 @@ fn write_to_gzip(output_path: &Path, mut recv: Receiver<Vec<u8>>) -> Result<(), 
     }
     gz.try_finish()?;
     Ok(())
-}
-
-#[derive(Display, Clone, Copy)]
-pub enum BackupCommand {
-    #[display(fmt = "list")]
-    List,
-    #[display(fmt = "backup")]
-    Backup,
-    #[display(fmt = "restore")]
-    Restore,
-}
-
-impl FromStr for BackupCommand {
-    type Err = Error;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_lowercase().as_str() {
-            "list" => Ok(Self::List),
-            "backup" => Ok(Self::Backup),
-            "restore" => Ok(Self::Restore),
-            _ => Err(format_err!("Invalid command")),
-        }
-    }
 }
 
 struct TaskNode<T>

@@ -339,6 +339,7 @@ mod tests {
     use maplit::hashmap;
     use std::convert::TryInto;
     use std::fs::{create_dir_all, remove_dir_all};
+    use log::debug;
 
     use crate::config::{Config, ConfigToml, EntryToml, UrlWrapper};
 
@@ -442,14 +443,14 @@ mod tests {
             ..EntryToml::default()
         };
         let entries = hashmap! {
-            "test_backup_app".into() => local_entry,
+            "Dropbox".into() => local_entry,
             "aws_app_rust".into() => aws_entry,
             "calendar_app_rust".into() => calendar_entry,
             "movie_collection_rust".into() => movie_entry,
         };
-        println!("{}", toml::to_string_pretty(&entries)?);
+        debug!("{}", toml::to_string_pretty(&entries)?);
         let config: Config = entries.try_into()?;
-        println!("{:?}", config);
+        debug!("{:?}", config);
 
         let home_dir = dirs::home_dir().expect("No HOME directory");
 
@@ -457,10 +458,11 @@ mod tests {
             .replace("HOME", &home_dir.to_string_lossy());
         let config_file: ConfigToml = toml::from_str(&data)?;
         let config_file: Config = config_file.try_into()?;
-        println!("{}", config_file);
+        debug!("{}", config_file.iter().count());
+        debug!("{}", config.iter().count());
         assert_eq!(config_file, config);
 
-        create_dir_all(home_dir.join("test_backup_app"))?;
+        remove_dir_all(home_dir.join("test_backup_app"))?;
 
         Ok(())
     }

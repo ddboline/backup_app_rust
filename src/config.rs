@@ -336,10 +336,12 @@ impl TryFrom<&str> for UrlWrapper {
 mod tests {
     use anyhow::Error;
     use chrono::Utc;
-    use maplit::hashmap;
-    use std::convert::TryInto;
-    use std::fs::{create_dir_all, remove_dir_all};
     use log::debug;
+    use maplit::hashmap;
+    use std::{
+        convert::TryInto,
+        fs::{create_dir_all, remove_dir_all},
+    };
 
     use crate::config::{Config, ConfigToml, EntryToml, UrlWrapper};
 

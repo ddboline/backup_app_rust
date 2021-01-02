@@ -337,7 +337,7 @@ mod tests {
     use anyhow::Error;
     use chrono::Utc;
     use maplit::hashmap;
-    use std::{convert::TryInto, fs};
+    use std::convert::TryInto;
 
     use crate::config::{Config, ConfigToml, EntryToml, UrlWrapper};
 
@@ -456,40 +456,6 @@ mod tests {
         let config_file: Config = config_file.try_into()?;
         println!("{}", config_file);
         assert_eq!(config_file, config);
-        Ok(())
-    }
-
-    #[test]
-    #[ignore]
-    fn test_local() -> Result<(), Error> {
-        let home_dir = dirs::home_dir().expect("No HOME directory");
-        let p = home_dir
-            .join(".config")
-            .join("backup_app_rust")
-            .join("postgres.toml");
-        let data = fs::read_to_string(&p)?;
-        let config_postgres: ConfigToml = toml::from_str(&data)?;
-        let config_postgres: Config = config_postgres.try_into()?;
-        println!("{:?}", config_postgres);
-
-        let p = home_dir
-            .join(".config")
-            .join("backup_app_rust")
-            .join("local_home_backup.toml");
-        let data = fs::read_to_string(&p)?;
-        let config_local_home: ConfigToml = toml::from_str(&data)?;
-        let config_local_home: Config = config_local_home.try_into()?;
-        println!("{:?}", config_local_home);
-
-        let p = home_dir
-            .join(".config")
-            .join("backup_app_rust")
-            .join("local_backup.toml");
-        let data = fs::read_to_string(&p)?;
-        let config_local: ConfigToml = toml::from_str(&data)?;
-        let config_local: Config = config_local.try_into()?;
-        println!("{:?}", config_local);
-
         Ok(())
     }
 }

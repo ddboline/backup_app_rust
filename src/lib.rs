@@ -10,6 +10,7 @@
 pub mod backup_opts;
 pub mod config;
 pub mod s3_instance;
+pub mod pgpool;
 
 use anyhow::Error;
 use rand::{

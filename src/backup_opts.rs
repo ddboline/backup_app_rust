@@ -27,6 +27,10 @@ use tokio::{
     task::{spawn, JoinHandle},
 };
 use url::Url;
+use futures::stream::TryStreamExt;
+use tokio_postgres::CopyOutStream;
+
+use crate::pgpool::PgPool;
 
 use crate::{
     config::{Config, Entry},
@@ -354,22 +358,13 @@ async fn backup_table(
             columns.iter().map(AsRef::as_ref).join(",")
         )
     };
+    let pool = PgPool::new(database_url.as_str());
 
-    let mut p = Command::new("psql")
-        .args(&[database_url.as_str(), "-c", &query])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()?;
-    let stdout = p.stdout.take().ok_or_else(|| format_err!("No Stdout"))?;
-    let stderr = p.stderr.take().ok_or_else(|| format_err!("No Stderr"))?;
-    let reader = BufReader::new(stderr);
-    let stderr_task: JoinHandle<Result<(), Error>> =
-        spawn(async move { output_to_error(reader, b'\n').await });
+    let stream = pool.get().await?.copy_out(query.as_str()).await?;
     let stdout_task: JoinHandle<Result<(), Error>> =
-        spawn(async move { output_to_gz_file(stdout, &destination_path).await });
-    p.wait().await?;
-    stdout_task.await??;
-    stderr_task.await??;
+        spawn(async move { 
+            output_copyoutstream_to_gz_file(stream, &destination_path).await 
+        });
 
     if destination.scheme() == "s3" {
         let s3 = S3Instance::default();
@@ -386,6 +381,7 @@ async fn restore_sequences(
     database_url: &Url,
     sequences: &HashMap<StackString, (StackString, StackString)>,
 ) -> Result<(), Error> {
+    let pool = PgPool::new(database_url.as_str());
     for (seq, (table, id)) in sequences {
         let output = Command::new("psql")
             .args(&[
@@ -626,6 +622,30 @@ fn read_from_gzip(input_path: &Path, send: &Sender<Vec<u8>>) -> Result<(), Error
             break;
         }
     }
+    Ok(())
+}
+
+async fn output_copyoutstream_to_gz_file(
+    reader: CopyOutStream,
+    output_path: impl AsRef<Path>,
+) -> Result<(), Error> {
+    let (send, recv) = channel(1);
+    let send = Arc::new(send);
+    let output_path = output_path.as_ref().to_path_buf();
+    let gz_task = spawn_threadpool(move || write_to_gzip(&output_path, recv));
+    reader.try_fold(Vec::new(), |mut buf, chunk| {
+        let send = send.clone();
+        async move {
+        buf.extend_from_slice(&chunk);
+        if buf.len() > 4096 {
+            let mut send_buf = Vec::with_capacity(4096);
+            std::mem::swap(&mut send_buf, &mut buf);
+            send.send(send_buf).await.unwrap();
+            Ok(buf)
+        } else {
+            Ok(buf)
+        }
+    }}).await?;
     Ok(())
 }
 

@@ -91,6 +91,7 @@ impl S3Instance {
         exponential_retry(|| {
             let req = DeleteBucketRequest {
                 bucket: bucket_name.to_string(),
+                ..DeleteBucketRequest::default()
             };
             async move { self.s3_client.delete_bucket(req).await.map_err(Into::into) }
         })

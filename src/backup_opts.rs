@@ -261,7 +261,7 @@ async fn process_entry(command: BackupCommand, key: &str, entry: &Entry) -> Resu
 }
 
 fn get_full_deps(
-    tables: impl IntoIterator<Item=impl AsRef<str>>,
+    tables: impl IntoIterator<Item = impl AsRef<str>>,
     columns: impl Iterator<Item = impl AsRef<str>>,
     dependencies: impl IntoIterator<Item = (impl AsRef<str>, impl IntoIterator<Item = impl AsRef<str>>)>,
 ) -> HashMap<StackString, BTreeSet<StackString>> {

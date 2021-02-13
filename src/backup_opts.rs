@@ -233,14 +233,15 @@ async fn process_entry(command: BackupCommand, key: &str, entry: &Entry) -> Resu
                 println!("Finished local_restore {}", key);
             }
         },
-        BackupCommand::Clear => match entry {
-            Entry::Postgres {
+        BackupCommand::Clear => {
+            if let Entry::Postgres {
                 database_url,
                 tables,
                 columns,
                 dependencies,
                 ..
-            } => {
+            } = entry
+            {
                 let full_deps = get_full_deps(tables, columns.keys(), dependencies);
 
                 process_tasks(&full_deps, |t| {
@@ -254,8 +255,7 @@ async fn process_entry(command: BackupCommand, key: &str, entry: &Entry) -> Resu
 
                 println!("finished clearing");
             }
-            _ => {}
-        },
+        }
     };
     Ok(())
 }

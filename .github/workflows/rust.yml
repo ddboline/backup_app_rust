@@ -38,16 +38,3 @@ jobs:
       with:
         name: code-coverage-report
         path: cobertura.xml
-
-  create-release:
-    needs: build
-    runs-on: ubuntu-20.04
-    steps:
-      - uses: actions/checkout@v2
-      - uses: taiki-e/create-gh-release-action@v1
-        with:
-          # (optional) Path to changelog.
-          changelog: CHANGELOG.md
-        env:
-          # (required) GitHub token for creating GitHub Releases.
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

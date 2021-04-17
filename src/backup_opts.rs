@@ -302,6 +302,11 @@ async fn run_local_backup(
         "zcvf".to_string(),
         destination.to_string(),
     ]);
+    if !exclude.is_empty() {
+        for ex in exclude {
+            args.push(format!("--exclude={}", ex.as_ref()));
+        }
+    }
     let backup_paths: Vec<_> = backup_paths
         .iter()
         .map(|p| p.as_ref().to_string_lossy().into_owned())
@@ -316,11 +321,6 @@ async fn run_local_backup(
         let mut output_file = File::create(output_filename.as_ref()).await?;
         output_file.write_all(&output.stdout).await?;
         args.push(output_filename.as_ref().to_string());
-    }
-    if !exclude.is_empty() {
-        for ex in exclude {
-            args.push(format!("--exclude={}", ex.as_ref()));
-        }
     }
     let mut p = Command::new(&args[0])
         .args(&args[1..])

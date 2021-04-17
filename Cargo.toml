@@ -1,6 +1,6 @@
 [package]
 name = "backup_app_rust"
-version = "0.2.1"
+version = "0.2.2"
 authors = ["Daniel Boline <ddboline@gmail.com>"]
 edition = "2018"
 
@@ -43,7 +43,7 @@ sts_profile_auth = "0.6"
 parking_lot = "0.11"
 num_cpus = "1.13"
 rayon = "1.5"
-stack-string = { git = "https://github.com/ddboline/stack-string-rs.git", tag="0.2.0", features=["diesel_types"] }
+stack-string = { version="0.2", features=["diesel_types"] }
 
 [[bin]]
 name = "backup-app-rust"

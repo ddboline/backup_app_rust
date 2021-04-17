@@ -216,19 +216,18 @@ impl TryFrom<ConfigToml> for Config {
                                     sequences,
                                 },
                             ));
-                        } else {
-                            return Ok((
-                                key.into(),
-                                Entry::Postgres {
-                                    database_url: database_url.into(),
-                                    destination,
-                                    tables,
-                                    columns: HashMap::new(),
-                                    dependencies,
-                                    sequences,
-                                },
-                            ));
                         }
+                        return Ok((
+                            key.into(),
+                            Entry::Postgres {
+                                database_url: database_url.into(),
+                                destination,
+                                tables,
+                                columns: HashMap::new(),
+                                dependencies,
+                                sequences,
+                            },
+                        ));
                     }
                 } else if let Some(backup_paths) = entry.backup_paths {
                     let backup_paths = backup_paths

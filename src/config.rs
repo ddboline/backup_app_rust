@@ -318,7 +318,7 @@ impl UrlWrapper {
 
 impl From<UrlWrapper> for String {
     fn from(item: UrlWrapper) -> String {
-        item.0.into_string()
+        item.0.into()
     }
 }
 

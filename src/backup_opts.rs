@@ -935,6 +935,7 @@ mod tests {
         });
         assert_eq!(task.await?, 25);
         let duration = Utc::now() - start_time;
+        println!("{}", duration.num_milliseconds());
         assert!(duration.num_milliseconds() > 1000);
         Ok(())
     }

@@ -32,13 +32,13 @@ itertools = "0.10"
 flate2 = "1.0"
 tokio = { version="1.2", features=["full"]}
 log = "0.4"
-env_logger = "0.8"
+env_logger = "0.9"
 tempfile = "3.2"
 rand = "0.8"
 futures = "0.3"
-rusoto_core = {version = "0.46", default_features = false, features=["rustls"]}
-rusoto_s3 = {version = "0.46", default_features = false, features=["rustls"]}
-s3-ext = "0.2"
+rusoto_core = {version = "0.47", default_features = false, features=["rustls"]}
+rusoto_s3 = {version = "0.47", default_features = false, features=["rustls"]}
+s3-ext = "0.3"
 sts_profile_auth = "0.6"
 parking_lot = "0.11"
 num_cpus = "1.13"

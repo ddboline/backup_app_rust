@@ -1,13 +1,13 @@
 use anyhow::{format_err, Error};
 use chrono::Utc;
-use derive_more::Into;
+use derive_more::{Into, IntoIterator, Deref};
 use itertools::Itertools;
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use stack_string::StackString;
 use std::{
     borrow::Cow,
-    collections::{hash_map::IntoIter, HashMap},
+    collections::{HashMap},
     convert::{TryFrom, TryInto},
     fmt, fs,
     path::{Path, PathBuf},
@@ -18,7 +18,7 @@ lazy_static! {
     pub static ref HOME: PathBuf = dirs::home_dir().expect("No Home Directory");
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, IntoIterator, Deref)]
 pub struct Config(HashMap<StackString, Entry>);
 
 impl Config {
@@ -26,18 +26,6 @@ impl Config {
         let data = fs::read_to_string(p)?;
         let config: ConfigToml = toml::from_str(&data)?;
         config.try_into()
-    }
-
-    pub fn iter(&self) -> impl Iterator<Item = (&StackString, &Entry)> {
-        self.0.iter()
-    }
-}
-
-impl IntoIterator for Config {
-    type Item = (StackString, Entry);
-    type IntoIter = IntoIter<StackString, Entry>;
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
     }
 }
 

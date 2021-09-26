@@ -150,7 +150,7 @@ async fn process_entry(command: BackupCommand, key: &str, entry: &Entry) -> Resu
                 let futures = tables.iter().map(|table| async move {
                     let empty = Vec::new();
                     let columns = columns.get(table).unwrap_or(&empty);
-                    backup_table(&database_url, &destination, &table, columns).await?;
+                    backup_table(database_url, &destination, &table, columns).await?;
                     Ok(())
                 });
                 let results: Result<Vec<_>, Error> = try_join_all(futures).await;
@@ -202,7 +202,7 @@ async fn process_entry(command: BackupCommand, key: &str, entry: &Entry) -> Resu
                 process_tasks(&full_deps, |t| {
                     let t = t.to_string();
                     async move {
-                        clear_table(&database_url, &t).await?;
+                        clear_table(database_url, &t).await?;
                         Ok(())
                     }
                 })
@@ -215,13 +215,13 @@ async fn process_entry(command: BackupCommand, key: &str, entry: &Entry) -> Resu
                     let columns = columns.get(t).unwrap_or(&empty).clone();
                     let t = t.to_string();
                     async move {
-                        restore_table(&database_url, &destination, &t, &columns).await?;
+                        restore_table(database_url, destination, &t, &columns).await?;
                         Ok(())
                     }
                 })
                 .await?;
 
-                restore_sequences(&database_url, sequences).await?;
+                restore_sequences(database_url, sequences).await?;
                 println!("Finished postgres_restore {}", key);
             }
             Entry::Local {
@@ -247,7 +247,7 @@ async fn process_entry(command: BackupCommand, key: &str, entry: &Entry) -> Resu
                 process_tasks(&full_deps, |t| {
                     let t = t.to_string();
                     async move {
-                        clear_table(&database_url, &t).await?;
+                        clear_table(database_url, &t).await?;
                         Ok(())
                     }
                 })
@@ -295,7 +295,7 @@ async fn run_local_backup(
     let destination = destination.path();
     let mut args = Vec::new();
     if require_sudo {
-        args.push("sudo".to_string())
+        args.push("sudo".to_string());
     }
     args.extend_from_slice(&[
         "tar".to_string(),
@@ -360,7 +360,7 @@ async fn run_local_restore(require_sudo: bool, destination: &Url) -> Result<(), 
     let destination = destination.path();
     let mut args = Vec::new();
     if require_sudo {
-        args.push("sudo".to_string())
+        args.push("sudo".to_string());
     }
     args.extend_from_slice(&[
         "tar".to_string(),

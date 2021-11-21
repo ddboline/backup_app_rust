@@ -13,6 +13,8 @@ FROM alpine:3.14
 
 COPY --from=buildstage /backup_app_rust/bin/* /usr/bin/
 
+RUN apk add postgresql-client
+
 STOPSIGNAL SIGTERM
 
 CMD ["/usr/bin/backup-app-rust"]

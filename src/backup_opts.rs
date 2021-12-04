@@ -1,6 +1,6 @@
 use anyhow::{format_err, Error};
 use deadqueue::unlimited::Queue;
-use derive_more::Display;
+use derive_more::{Display, Deref};
 use flate2::{read::GzDecoder, Compression, GzBuilder};
 use futures::future::try_join_all;
 use itertools::Itertools;
@@ -76,6 +76,15 @@ struct BackupEntry {
     entry: Entry,
 }
 
+#[derive(Clone, Deref)]
+struct BackupQueue(Arc<Queue<Option<BackupEntry>>>);
+
+impl BackupQueue {
+    fn new() -> Self {
+        Self(Arc::new(Queue::new()))
+    }
+}
+
 #[derive(StructOpt)]
 pub struct BackupOpts {
     /// list, backup, restore, clear
@@ -97,7 +106,7 @@ impl BackupOpts {
                 opts.config_file.to_string_lossy()
             ));
         }
-        let queue: Arc<Queue<Option<BackupEntry>>> = Arc::new(Queue::new());
+        let queue = BackupQueue::new();
         let config = Config::new(&opts.config_file)?;
         let num_workers = opts.num_workers.unwrap_or_else(num_cpus::get);
         rayon::ThreadPoolBuilder::new()

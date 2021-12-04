@@ -70,6 +70,12 @@ impl FromStr for BackupCommand {
     }
 }
 
+struct BackupEntry {
+    command: BackupCommand,
+    key: StackString,
+    entry: Entry,
+}
+
 #[derive(StructOpt)]
 pub struct BackupOpts {
     /// list, backup, restore, clear
@@ -91,7 +97,7 @@ impl BackupOpts {
                 opts.config_file.to_string_lossy()
             ));
         }
-        let queue: Arc<Queue<Option<(BackupCommand, StackString, Entry)>>> = Arc::new(Queue::new());
+        let queue: Arc<Queue<Option<BackupEntry>>> = Arc::new(Queue::new());
         let config = Config::new(&opts.config_file)?;
         let num_workers = opts.num_workers.unwrap_or_else(num_cpus::get);
         rayon::ThreadPoolBuilder::new()
@@ -104,9 +110,14 @@ impl BackupOpts {
             })
             .collect();
 
-        for (key, val) in config {
+        for (key, entry) in config {
             if opts.key.is_none() || opts.key.as_ref() == Some(&key) {
-                queue.push(Some((opts.command, key, val)));
+                let entry = BackupEntry {
+                    command: opts.command,
+                    key,
+                    entry,
+                };
+                queue.push(Some(entry));
             }
         }
 
@@ -119,17 +130,17 @@ impl BackupOpts {
     }
 }
 
-async fn worker_task(
-    queue: &Queue<Option<(BackupCommand, StackString, Entry)>>,
-) -> Result<(), Error> {
-    while let Some((command, key, entry)) = queue.pop().await {
-        process_entry(command, &key, &entry).await?;
+async fn worker_task(queue: &Queue<Option<BackupEntry>>) -> Result<(), Error> {
+    while let Some(entry) = queue.pop().await {
+        process_entry(&entry).await?;
     }
     Ok(())
 }
 
-async fn process_entry(command: BackupCommand, key: &str, entry: &Entry) -> Result<(), Error> {
-    match command {
+async fn process_entry(backup_entry: &BackupEntry) -> Result<(), Error> {
+    let key = &backup_entry.key;
+    let entry = &backup_entry.entry;
+    match backup_entry.command {
         BackupCommand::List => {
             println!("{} {}", key, entry);
         }

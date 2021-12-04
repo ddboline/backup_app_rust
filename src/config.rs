@@ -1,13 +1,13 @@
 use anyhow::{format_err, Error};
 use chrono::Utc;
-use derive_more::{Into, IntoIterator, Deref};
+use derive_more::{Deref, DerefMut, Into, IntoIterator};
 use itertools::Itertools;
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use stack_string::StackString;
 use std::{
     borrow::Cow,
-    collections::{HashMap},
+    collections::HashMap,
     convert::{TryFrom, TryInto},
     fmt, fs,
     path::{Path, PathBuf},
@@ -18,13 +18,13 @@ lazy_static! {
     pub static ref HOME: PathBuf = dirs::home_dir().expect("No Home Directory");
 }
 
-#[derive(Debug, PartialEq, IntoIterator, Deref)]
-pub struct Config(HashMap<StackString, Entry>);
+#[derive(Debug, PartialEq, IntoIterator, Deref, DerefMut)]
+pub struct Config(Vec<(StackString, Entry)>);
 
 impl Config {
     pub fn new(p: &Path) -> Result<Self, Error> {
-        let data = fs::read_to_string(p)?;
-        let config: ConfigToml = toml::from_str(&data)?;
+        let data = fs::read(p)?;
+        let config: ConfigToml = toml::from_slice(&data)?;
         config.try_into()
     }
 }
@@ -155,99 +155,98 @@ impl TryFrom<ConfigToml> for Config {
         let result: Result<_, Error> = item
             .into_iter()
             .map(|(key, entry)| {
-                let destination = entry
-                    .destination
-                    .ok_or_else(|| format_err!("No destination"))?
-                    .into();
-                let require_sudo = entry.require_sudo.unwrap_or(false);
-                let full_postgres_backup = entry.full_postgres_backup.unwrap_or(false);
-                let sequences = entry
-                    .sequences
-                    .unwrap_or_else(HashMap::new)
-                    .into_iter()
-                    .map(|(k, v)| (k.into(), v))
-                    .collect();
-                let command_output = entry.command_output.unwrap_or_else(Vec::new);
-                let exclude = entry.exclude.unwrap_or_else(Vec::new);
-                if full_postgres_backup {
-                    return Ok((key.into(), Entry::FullPostgresBackup { destination }));
-                } else if let Some(database_url) = entry.database_url {
-                    if let Some(tables) = entry.tables {
-                        let dependencies = entry
-                            .dependencies
-                            .unwrap_or_else(HashMap::new)
-                            .into_iter()
-                            .map(|(k, mut v)| {
-                                v.sort();
-                                v.dedup();
-                                (k.into(), v)
-                            })
-                            .collect();
-                        if let Some(columns) = entry.columns {
-                            let columns: HashMap<_, _> =
-                                columns.into_iter().map(|(k, v)| (k.into(), v)).collect();
-                            let tables = tables
-                                .iter()
-                                .chain(columns.keys())
-                                .sorted()
-                                .dedup()
-                                .cloned()
-                                .collect();
-                            return Ok((
-                                key.into(),
-                                Entry::Postgres {
-                                    database_url: database_url.into(),
-                                    destination,
-                                    tables,
-                                    columns,
-                                    dependencies,
-                                    sequences,
-                                },
-                            ));
-                        }
-                        return Ok((
-                            key.into(),
-                            Entry::Postgres {
-                                database_url: database_url.into(),
-                                destination,
-                                tables,
-                                columns: HashMap::new(),
-                                dependencies,
-                                sequences,
-                            },
-                        ));
-                    }
-                } else if let Some(backup_paths) = entry.backup_paths {
-                    let backup_paths = backup_paths
-                        .into_iter()
-                        .map(|p| {
-                            if p.exists() {
-                                Ok(p)
-                            } else {
-                                let new_p = HOME.join(&p);
-                                if new_p.exists() {
-                                    Ok(new_p)
-                                } else {
-                                    Err(format_err!("Path {:?} does not exist", p))
-                                }
-                            }
-                        })
-                        .collect::<Result<Vec<_>, Error>>()?;
-                    return Ok((
-                        key.into(),
-                        Entry::Local {
-                            require_sudo,
-                            destination,
-                            backup_paths,
-                            command_output,
-                            exclude,
-                        },
-                    ));
-                }
-                Err(format_err!("Bad config format"))
+                let entry = entry.try_into()?;
+                Ok((key.into(), entry))
             })
             .collect();
         Ok(Self(result?))
+    }
+}
+
+impl TryFrom<EntryToml> for Entry {
+    type Error = Error;
+    fn try_from(entry: EntryToml) -> Result<Self, Self::Error> {
+        let destination = entry
+            .destination
+            .ok_or_else(|| format_err!("No destination"))?
+            .into();
+        let require_sudo = entry.require_sudo.unwrap_or(false);
+        let full_postgres_backup = entry.full_postgres_backup.unwrap_or(false);
+        let sequences = entry
+            .sequences
+            .unwrap_or_else(HashMap::new)
+            .into_iter()
+            .map(|(k, v)| (k.into(), v))
+            .collect();
+        let command_output = entry.command_output.unwrap_or_else(Vec::new);
+        let exclude = entry.exclude.unwrap_or_else(Vec::new);
+        if full_postgres_backup {
+            return Ok(Self::FullPostgresBackup { destination });
+        } else if let Some(database_url) = entry.database_url {
+            if let Some(tables) = entry.tables {
+                let dependencies = entry
+                    .dependencies
+                    .unwrap_or_else(HashMap::new)
+                    .into_iter()
+                    .map(|(k, mut v)| {
+                        v.sort();
+                        v.dedup();
+                        (k.into(), v)
+                    })
+                    .collect();
+                if let Some(columns) = entry.columns {
+                    let columns: HashMap<_, _> =
+                        columns.into_iter().map(|(k, v)| (k.into(), v)).collect();
+                    let tables = tables
+                        .iter()
+                        .chain(columns.keys())
+                        .sorted()
+                        .dedup()
+                        .cloned()
+                        .collect();
+                    return Ok(Self::Postgres {
+                        database_url: database_url.into(),
+                        destination,
+                        tables,
+                        columns,
+                        dependencies,
+                        sequences,
+                    });
+                }
+                return Ok(Self::Postgres {
+                    database_url: database_url.into(),
+                    destination,
+                    tables,
+                    columns: HashMap::new(),
+                    dependencies,
+                    sequences,
+                });
+            }
+        } else if let Some(backup_paths) = entry.backup_paths {
+            let backup_paths = backup_paths
+                .into_iter()
+                .map(|p| {
+                    if p.exists() {
+                        Ok(p)
+                    } else {
+                        let new_p = HOME.join(&p);
+                        if new_p.exists() {
+                            Ok(new_p)
+                        } else {
+                            Err(format_err!("Path {:?} does not exist", p))
+                        }
+                    }
+                })
+                .collect::<Result<Vec<_>, Error>>()?;
+            return Ok(Self::Local {
+                require_sudo,
+                destination,
+                backup_paths,
+                command_output,
+                exclude,
+            });
+        }
+        Err(format_err!("Bad config format"))
     }
 }
 
@@ -438,7 +437,8 @@ mod tests {
             "movie_collection_rust".into() => movie_entry,
         };
         debug!("{}", toml::to_string_pretty(&entries)?);
-        let config: Config = entries.try_into()?;
+        let mut config: Config = entries.try_into()?;
+        config.sort_by(|x, y| x.0.cmp(&y.0));
         debug!("{:?}", config);
 
         let home_dir = dirs::home_dir().expect("No HOME directory");
@@ -446,9 +446,10 @@ mod tests {
         let data = include_str!("../tests/data/test_config.toml")
             .replace("HOME", &home_dir.to_string_lossy());
         let config_file: ConfigToml = toml::from_str(&data)?;
-        let config_file: Config = config_file.try_into()?;
-        debug!("{}", config_file.iter().count());
-        debug!("{}", config.iter().count());
+        let mut config_file: Config = config_file.try_into()?;
+        config_file.sort_by(|x, y| x.0.cmp(&y.0));
+        debug!("{}", config_file.len());
+        debug!("{}", config.len());
         assert_eq!(config_file, config);
 
         remove_dir_all(home_dir.join("test_backup_app"))?;

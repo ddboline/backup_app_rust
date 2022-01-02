@@ -28,7 +28,7 @@ pub struct S3Instance {
 
 impl fmt::Debug for S3Instance {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "S3Instance")
+        f.write_str("S3Instance")
     }
 }
 

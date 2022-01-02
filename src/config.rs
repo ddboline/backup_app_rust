@@ -62,7 +62,8 @@ pub enum Entry {
 
 impl fmt::Display for Entry {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let s = match self {
+        write!(f, "Entry ")?;
+        match self {
             Self::Postgres {
                 database_url,
                 destination,
@@ -70,82 +71,87 @@ impl fmt::Display for Entry {
                 columns,
                 dependencies,
                 sequences,
-            } => format!(
-                "postgres\n\tdb_url: {}\n\tdest: {}\n{}{}{}{}",
-                database_url.as_str(),
-                destination.as_str(),
-                if tables.is_empty() {
-                    "".to_string()
-                } else {
-                    format!("\ttables: {}\n", tables.join(", "))
-                },
-                if columns.is_empty() {
-                    "".to_string()
-                } else {
-                    format!(
-                        "\tcolumns: {}\n",
-                        columns
-                            .iter()
-                            .map(|(k, v)| { format!("{}: [{}]", k, v.join(",")) })
-                            .join(", ")
-                    )
-                },
-                if dependencies.is_empty() {
-                    "".to_string()
-                } else {
-                    format!(
-                        "\tdependencies: {}\n",
-                        dependencies
-                            .iter()
-                            .map(|(k, v)| { format!("{}: [{}]", k, v.join(",")) })
-                            .join(", ")
-                    )
-                },
-                if sequences.is_empty() {
-                    "".to_string()
-                } else {
-                    format!(
-                        "\tsequences: {}\n",
-                        sequences
-                            .iter()
-                            .map(|(k, (a, b))| format!("{} {} {}", k, a, b))
-                            .join(", ")
-                    )
-                }
-            ),
+            } => {
+                write!(
+                    f,
+                    "postgres\n\tdb_url: {}\n\tdest: {}\n{}{}{}{}",
+                    database_url.as_str(),
+                    destination.as_str(),
+                    if tables.is_empty() {
+                        "".to_string()
+                    } else {
+                        format!("\ttables: {}\n", tables.join(", "))
+                    },
+                    if columns.is_empty() {
+                        "".to_string()
+                    } else {
+                        format!(
+                            "\tcolumns: {}\n",
+                            columns
+                                .iter()
+                                .map(|(k, v)| { format!("{}: [{}]", k, v.join(",")) })
+                                .join(", ")
+                        )
+                    },
+                    if dependencies.is_empty() {
+                        "".to_string()
+                    } else {
+                        format!(
+                            "\tdependencies: {}\n",
+                            dependencies
+                                .iter()
+                                .map(|(k, v)| { format!("{}: [{}]", k, v.join(",")) })
+                                .join(", ")
+                        )
+                    },
+                    if sequences.is_empty() {
+                        "".to_string()
+                    } else {
+                        format!(
+                            "\tsequences: {}\n",
+                            sequences
+                                .iter()
+                                .map(|(k, (a, b))| format!("{} {} {}", k, a, b))
+                                .join(", ")
+                        )
+                    }
+                )
+            }
             Self::Local {
                 require_sudo,
                 destination,
                 backup_paths,
                 command_output,
                 exclude,
-            } => format!(
-                "local\n\tsudo: {}\n\tdest: {}\n\tpaths: {}\n{}{}",
-                require_sudo,
-                destination.as_str(),
-                backup_paths.iter().map(|p| p.to_string_lossy()).join(", "),
-                if command_output.is_empty() {
-                    "".to_string()
-                } else {
-                    format!(
-                        "\tcommand: {}\n",
-                        command_output
-                            .iter()
-                            .map(|(a, b)| format!("{} {}", a, b))
-                            .join(", ")
-                    )
-                },
-                if exclude.is_empty() {
-                    "".to_string()
-                } else {
-                    format!("\texclude: {}\n", exclude.join(", "))
-                }
-            ),
-            Self::FullPostgresBackup { destination } => {
-                format!("full_postgres_backup {}", destination.as_str())
+            } => {
+                write!(
+                    f,
+                    "local\n\tsudo: {}\n\tdest: {}\n\tpaths: {}\n{}{}",
+                    require_sudo,
+                    destination.as_str(),
+                    backup_paths.iter().map(|p| p.to_string_lossy()).join(", "),
+                    if command_output.is_empty() {
+                        "".to_string()
+                    } else {
+                        format!(
+                            "\tcommand: {}\n",
+                            command_output
+                                .iter()
+                                .map(|(a, b)| format!("{} {}", a, b))
+                                .join(", ")
+                        )
+                    },
+                    if exclude.is_empty() {
+                        "".to_string()
+                    } else {
+                        format!("\texclude: {}\n", exclude.join(", "))
+                    }
+                )
             }
-        };
-        write!(f, "Entry {}", s)
+            Self::FullPostgresBackup { destination } => {
+                write!(f, "full_postgres_backup {}", destination.as_str())
+            }
+        }
     }
 }
 
@@ -274,7 +280,7 @@ pub struct UrlWrapper(Url);
 impl UrlWrapper {
     fn replace_date(s: &str) -> Cow<str> {
         if s.contains("DATE") {
-            let date = Utc::now().format("%Y%m%d").to_string();
+            let date = StackString::from_display(Utc::now().format("%Y%m%d")).unwrap();
             s.replace("DATE", &date).into()
         } else {
             s.into()
@@ -283,7 +289,7 @@ impl UrlWrapper {
 
     fn replace_sysid(s: &str) -> Result<Cow<str>, Error> {
         if s.contains("SYSID") {
-            let date = Utc::now().format("%Y%m%d").to_string();
+            let date = Utc::now().format("%Y%m%d");
             let sysid: Vec<u8> = std::process::Command::new("uname")
                 .args(&["-snrmpio"])
                 .output()?

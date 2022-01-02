@@ -40,7 +40,9 @@ where
 {
     let (send, recv) = oneshot::channel();
     rayon::spawn(move || {
-        send.send(f()).unwrap();
+        if let Err(e) = send.send(f()) {
+            error!("Send error {:?}", e);
+        }
     });
     recv
 }
@@ -220,7 +222,7 @@ async fn process_entry(backup_entry: &BackupEntry) -> Result<(), Error> {
                 }
 
                 process_tasks(&full_deps, |t| {
-                    let t = t.to_string();
+                    let t: StackString = t.into();
                     async move {
                         clear_table(database_url, &t).await?;
                         Ok(())
@@ -233,7 +235,7 @@ async fn process_entry(backup_entry: &BackupEntry) -> Result<(), Error> {
                 process_tasks(&parents_graph, |t| {
                     let empty = Vec::new();
                     let columns = columns.get(t).unwrap_or(&empty).clone();
-                    let t = t.to_string();
+                    let t: StackString = t.into();
                     async move {
                         restore_table(database_url, destination, &t, &columns).await?;
                         Ok(())
@@ -265,7 +267,7 @@ async fn process_entry(backup_entry: &BackupEntry) -> Result<(), Error> {
                 let full_deps = get_full_deps(tables, columns.keys(), dependencies);
 
                 process_tasks(&full_deps, |t| {
-                    let t = t.to_string();
+                    let t: StackString = t.into();
                     async move {
                         clear_table(database_url, &t).await?;
                         Ok(())
@@ -311,25 +313,25 @@ async fn run_local_backup(
     command_output: &[(impl AsRef<str>, impl AsRef<str>)],
     exclude: &[impl AsRef<str>],
 ) -> Result<(), Error> {
-    let user = std::env::var("USER").unwrap_or_else(|_| "root".to_string());
+    let user = std::env::var("USER").unwrap_or_else(|_| "root".into());
     let destination = destination.path();
-    let mut args = Vec::new();
+    let mut args: Vec<StackString> = Vec::new();
     if require_sudo {
-        args.push("sudo".to_string());
+        args.push("sudo".into());
     }
     args.extend_from_slice(&[
-        "tar".to_string(),
-        "zcvf".to_string(),
-        destination.to_string(),
+        "tar".into(),
+        "zcvf".into(),
+        destination.into(),
     ]);
     if !exclude.is_empty() {
         for ex in exclude {
-            args.push(format!("--exclude={}", ex.as_ref()));
+            args.push(format!("--exclude={}", ex.as_ref()).into());
         }
     }
     let backup_paths: Vec<_> = backup_paths
         .iter()
-        .map(|p| p.as_ref().to_string_lossy().into_owned())
+        .map(|p| p.as_ref().to_string_lossy().into_owned().into())
         .collect();
     args.extend_from_slice(&backup_paths);
     for (cmd, output_filename) in command_output {
@@ -340,7 +342,7 @@ async fn run_local_backup(
             .await?;
         let mut output_file = File::create(output_filename.as_ref()).await?;
         output_file.write_all(&output.stdout).await?;
-        args.push(output_filename.as_ref().to_string());
+        args.push(output_filename.as_ref().into());
     }
     let mut p = Command::new(&args[0])
         .args(&args[1..])
@@ -378,14 +380,14 @@ async fn run_local_backup(
 
 async fn run_local_restore(require_sudo: bool, destination: &Url) -> Result<(), Error> {
     let destination = destination.path();
-    let mut args = Vec::new();
+    let mut args: Vec<StackString> = Vec::new();
     if require_sudo {
-        args.push("sudo".to_string());
+        args.push("sudo".into());
     }
     args.extend_from_slice(&[
-        "tar".to_string(),
-        "zxvf".to_string(),
-        destination.to_string(),
+        "tar".into(),
+        "zxvf".into(),
+        destination.into(),
     ]);
 
     let mut p = Command::new(&args[0])
@@ -786,8 +788,12 @@ where
         for child in val {
             let (s, r) = channel(1);
             println!("{} {}", key.as_ref(), child.as_ref());
-            tasks.get_mut(key.as_ref()).unwrap().sends.push(s);
-            tasks.get_mut(child.as_ref()).unwrap().recvs.push(r);
+            if let Some(task) = tasks.get_mut(key.as_ref()) {
+                task.sends.push(s);
+            }
+            if let Some(task) = tasks.get_mut(child.as_ref()) {
+                task.recvs.push(r);
+            }
         }
     }
 
@@ -956,7 +962,7 @@ mod tests {
         assert_eq!(task.await?, 25);
         let duration = Utc::now() - start_time;
         println!("{}", duration.num_milliseconds());
-        assert!(duration.num_milliseconds() > 1000);
+        assert!(duration.num_milliseconds() >= 1000);
         Ok(())
     }
 }

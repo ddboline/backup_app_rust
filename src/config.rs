@@ -62,7 +62,7 @@ pub enum Entry {
 
 impl fmt::Display for Entry {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Entry ")?;
+        f.write_str("Entry ")?;
         match self {
             Self::Postgres {
                 database_url,

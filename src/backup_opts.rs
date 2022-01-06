@@ -1,6 +1,6 @@
 use anyhow::{format_err, Error};
 use deadqueue::unlimited::Queue;
-use derive_more::{Display, Deref};
+use derive_more::{Deref, Display};
 use flate2::{read::GzDecoder, Compression, GzBuilder};
 use futures::future::try_join_all;
 use itertools::Itertools;
@@ -172,7 +172,7 @@ async fn process_entry(backup_entry: &BackupEntry) -> Result<(), Error> {
                 let futures = tables.iter().map(|table| async move {
                     let empty = Vec::new();
                     let columns = columns.get(table).unwrap_or(&empty);
-                    backup_table(database_url, &destination, &table, columns).await?;
+                    backup_table(database_url, destination, table, columns).await?;
                     Ok(())
                 });
                 let results: Result<Vec<_>, Error> = try_join_all(futures).await;
@@ -319,11 +319,7 @@ async fn run_local_backup(
     if require_sudo {
         args.push("sudo".into());
     }
-    args.extend_from_slice(&[
-        "tar".into(),
-        "zcvf".into(),
-        destination.into(),
-    ]);
+    args.extend_from_slice(&["tar".into(), "zcvf".into(), destination.into()]);
     if !exclude.is_empty() {
         for ex in exclude {
             args.push(format!("--exclude={}", ex.as_ref()).into());
@@ -384,11 +380,7 @@ async fn run_local_restore(require_sudo: bool, destination: &Url) -> Result<(), 
     if require_sudo {
         args.push("sudo".into());
     }
-    args.extend_from_slice(&[
-        "tar".into(),
-        "zxvf".into(),
-        destination.into(),
-    ]);
+    args.extend_from_slice(&["tar".into(), "zxvf".into(), destination.into()]);
 
     let mut p = Command::new(&args[0])
         .args(&args[1..])

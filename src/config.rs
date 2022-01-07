@@ -4,12 +4,14 @@ use derive_more::{Deref, DerefMut, Into, IntoIterator};
 use itertools::Itertools;
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
-use stack_string::StackString;
+use stack_string::{format_sstr, StackString};
 use std::{
     borrow::Cow,
     collections::HashMap,
     convert::{TryFrom, TryInto},
-    fmt, fs,
+    fmt,
+    fmt::Write,
+    fs,
     path::{Path, PathBuf},
 };
 use url::Url;
@@ -78,40 +80,40 @@ impl fmt::Display for Entry {
                     database_url.as_str(),
                     destination.as_str(),
                     if tables.is_empty() {
-                        "".to_string()
+                        "".into()
                     } else {
-                        format!("\ttables: {}\n", tables.join(", "))
+                        format_sstr!("\ttables: {}\n", tables.join(", "))
                     },
                     if columns.is_empty() {
-                        "".to_string()
+                        "".into()
                     } else {
-                        format!(
+                        format_sstr!(
                             "\tcolumns: {}\n",
                             columns
                                 .iter()
-                                .map(|(k, v)| { format!("{}: [{}]", k, v.join(",")) })
+                                .map(|(k, v)| { format_sstr!("{}: [{}]", k, v.join(",")) })
                                 .join(", ")
                         )
                     },
                     if dependencies.is_empty() {
-                        "".to_string()
+                        "".into()
                     } else {
-                        format!(
+                        format_sstr!(
                             "\tdependencies: {}\n",
                             dependencies
                                 .iter()
-                                .map(|(k, v)| { format!("{}: [{}]", k, v.join(",")) })
+                                .map(|(k, v)| { format_sstr!("{}: [{}]", k, v.join(",")) })
                                 .join(", ")
                         )
                     },
                     if sequences.is_empty() {
-                        "".to_string()
+                        "".into()
                     } else {
-                        format!(
+                        format_sstr!(
                             "\tsequences: {}\n",
                             sequences
                                 .iter()
-                                .map(|(k, (a, b))| format!("{} {} {}", k, a, b))
+                                .map(|(k, (a, b))| format_sstr!("{} {} {}", k, a, b))
                                 .join(", ")
                         )
                     }
@@ -131,20 +133,20 @@ impl fmt::Display for Entry {
                     destination.as_str(),
                     backup_paths.iter().map(|p| p.to_string_lossy()).join(", "),
                     if command_output.is_empty() {
-                        "".to_string()
+                        "".into()
                     } else {
-                        format!(
+                        format_sstr!(
                             "\tcommand: {}\n",
                             command_output
                                 .iter()
-                                .map(|(a, b)| format!("{} {}", a, b))
+                                .map(|(a, b)| format_sstr!("{} {}", a, b))
                                 .join(", ")
                         )
                     },
                     if exclude.is_empty() {
-                        "".to_string()
+                        "".into()
                     } else {
-                        format!("\texclude: {}\n", exclude.join(", "))
+                        format_sstr!("\texclude: {}\n", exclude.join(", "))
                     }
                 )
             }
@@ -280,7 +282,7 @@ pub struct UrlWrapper(Url);
 impl UrlWrapper {
     fn replace_date(s: &str) -> Cow<str> {
         if s.contains("DATE") {
-            let date = StackString::from_display(Utc::now().format("%Y%m%d")).unwrap();
+            let date = StackString::from_display(Utc::now().format("%Y%m%d"));
             s.replace("DATE", &date).into()
         } else {
             s.into()
@@ -301,7 +303,7 @@ impl UrlWrapper {
                 })
                 .collect();
             let sysid = String::from_utf8(sysid)?;
-            let sysid = format!("{}_{}", sysid, date);
+            let sysid = format_sstr!("{}_{}", sysid, date);
             Ok(s.replace("SYSID", &sysid).into())
         } else {
             Ok(s.into())
@@ -330,8 +332,10 @@ mod tests {
     use chrono::Utc;
     use log::debug;
     use maplit::hashmap;
+    use stack_string::{format_sstr, StackString};
     use std::{
         convert::TryInto,
+        fmt::Write,
         fs::{create_dir_all, remove_dir_all},
     };
 
@@ -405,7 +409,7 @@ mod tests {
             ..EntryToml::default()
         };
 
-        let date = Utc::now().format("%Y%m%d").to_string();
+        let date = StackString::from_display(Utc::now().format("%Y%m%d"));
         let sysid: Vec<u8> = std::process::Command::new("uname")
             .args(&["-snrmpio"])
             .output()?
@@ -417,12 +421,12 @@ mod tests {
             })
             .collect();
         let sysid = String::from_utf8(sysid)?;
-        let sysid = format!("{}_{}", sysid, date);
+        let sysid = format_sstr!("{}_{}", sysid, date);
 
         create_dir_all(home_dir.join("test_backup_app"))?;
 
         let backup_paths = vec![home_dir.join("test_backup_app")];
-        let destination = format!(
+        let destination = format_sstr!(
             "file://{}/temp_{}_{}.tar.gz",
             home_dir.to_string_lossy(),
             sysid,

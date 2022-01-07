@@ -5,9 +5,10 @@ use flate2::{read::GzDecoder, Compression, GzBuilder};
 use futures::future::try_join_all;
 use itertools::Itertools;
 use log::{debug, error};
-use stack_string::StackString;
+use stack_string::{format_sstr, StackString};
 use std::{
     collections::{BTreeSet, HashMap},
+    fmt::Write,
     future::Future,
     path::{Path, PathBuf},
     process::Stdio,
@@ -322,7 +323,7 @@ async fn run_local_backup(
     args.extend_from_slice(&["tar".into(), "zcvf".into(), destination.into()]);
     if !exclude.is_empty() {
         for ex in exclude {
-            args.push(format!("--exclude={}", ex.as_ref()).into());
+            args.push(format_sstr!("--exclude={}", ex.as_ref()).into());
         }
     }
     let backup_paths: Vec<_> = backup_paths
@@ -361,7 +362,7 @@ async fn run_local_backup(
 
     if require_sudo {
         let output = Command::new("sudo")
-            .args(&["chown", &format!("{u}:{u}", u = user), destination])
+            .args(&["chown", &format_sstr!("{u}:{u}", u = user), destination])
             .output()
             .await?;
         if !output.stdout.is_empty() {
@@ -412,14 +413,14 @@ async fn backup_table(
 ) -> Result<(), Error> {
     let tempfile = NamedTempFile::new()?;
     let destination_path = if destination.scheme() == "file" {
-        Path::new(destination.path()).join(format!("{}.sql.gz", table))
+        Path::new(destination.path()).join(format_sstr!("{}.sql.gz", table))
     } else {
         tempfile.path().to_path_buf()
     };
     let query = if columns.is_empty() {
-        format!("COPY {} TO STDOUT", table)
+        format_sstr!("COPY {} TO STDOUT", table)
     } else {
-        format!(
+        format_sstr!(
             "COPY {} ({}) TO STDOUT",
             table,
             columns.iter().map(AsRef::as_ref).join(",")
@@ -447,7 +448,7 @@ async fn backup_table(
         let bucket = destination
             .host_str()
             .ok_or_else(|| format_err!("Parse error"))?;
-        let key = format!("{}.sql.gz", table);
+        let key = format_sstr!("{}.sql.gz", table);
         s3.upload(tempfile.path(), bucket, &key).await?;
     }
     Ok(())
@@ -462,9 +463,11 @@ async fn restore_sequences(
             .args(&[
                 database_url.as_str(),
                 "-c",
-                &format!(
+                &format_sstr!(
                     "SELECT setval('{}', (SELECT max({}) FROM {}), TRUE)",
-                    seq, id, table
+                    seq,
+                    id,
+                    table
                 ),
             ])
             .output()
@@ -485,7 +488,7 @@ async fn clear_table(database_url: &Url, table: &str) -> Result<(), Error> {
         .args(&[
             database_url.as_str(),
             "-c",
-            &format!("DELETE FROM {}", table),
+            &format_sstr!("DELETE FROM {}", table),
         ])
         .output()
         .await?;
@@ -506,22 +509,22 @@ async fn restore_table(
 ) -> Result<(), Error> {
     let tempdir = tempfile::tempdir()?;
     let destination_path = if destination.scheme() == "file" {
-        Path::new(destination.path()).join(format!("{}.sql.gz", table))
+        Path::new(destination.path()).join(format_sstr!("{}.sql.gz", table))
     } else {
         let s3 = S3Instance::default();
         let bucket = destination
             .host_str()
             .ok_or_else(|| format_err!("Parse error"))?;
-        let key = format!("{}.sql.gz", table);
+        let key = format_sstr!("{}.sql.gz", table);
         let tempfile = tempdir.path().join(&key);
         let fname = tempfile.to_string_lossy();
         s3.download(bucket, &key, fname.as_ref()).await?;
         tempfile
     };
     let query = if columns.is_empty() {
-        format!("COPY {} FROM STDIN", table)
+        format_sstr!("COPY {} FROM STDIN", table)
     } else {
-        format!(
+        format_sstr!(
             "COPY {} ({}) FROM STDIN",
             table,
             columns.iter().map(AsRef::as_ref).join(",")
@@ -859,9 +862,10 @@ mod tests {
     use anyhow::Error;
     use chrono::Utc;
     use maplit::{btreeset, hashmap};
-    use stack_string::StackString;
+    use stack_string::{format_sstr, StackString};
     use std::{
         collections::{BTreeSet, HashMap},
+        fmt::Write,
         sync::Arc,
     };
     use tokio::sync::Mutex;
@@ -870,7 +874,7 @@ mod tests {
 
     #[test]
     fn test_backupcommand_display() -> Result<(), Error> {
-        let s = format!(
+        let s = format_sstr!(
             "{} {} {}",
             BackupCommand::List,
             BackupCommand::Backup,
@@ -882,7 +886,7 @@ mod tests {
 
     #[test]
     fn test_topological_sort() -> Result<(), Error> {
-        let ns: Vec<StackString> = (0..8).map(|i| format!("n{}", i).into()).collect();
+        let ns: Vec<StackString> = (0..8).map(|i| format_sstr!("n{}", i).into()).collect();
         let dependencies = hashmap! {
             "n0".into() => btreeset!["n1".into(), "n2".into(), "n3".into()],
             "n1".into() => btreeset!["n4".into(), "n6".into()],

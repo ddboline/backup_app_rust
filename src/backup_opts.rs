@@ -323,7 +323,7 @@ async fn run_local_backup(
     args.extend_from_slice(&["tar".into(), "zcvf".into(), destination.into()]);
     if !exclude.is_empty() {
         for ex in exclude {
-            args.push(format_sstr!("--exclude={}", ex.as_ref()).into());
+            args.push(format_sstr!("--exclude={}", ex.as_ref()));
         }
     }
     let backup_paths: Vec<_> = backup_paths

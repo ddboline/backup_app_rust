@@ -76,15 +76,13 @@ impl fmt::Display for Entry {
             } => {
                 write!(
                     f,
-                    "postgres\n\tdb_url: {}\n\tdest: {}\n{}{}{}{}",
-                    database_url.as_str(),
-                    destination.as_str(),
-                    if tables.is_empty() {
+                    "postgres\n\tdb_url: {database_url}\n\tdest: {destination}\n{t}{c}{d}{s}",
+                    t = if tables.is_empty() {
                         "".into()
                     } else {
                         format_sstr!("\ttables: {}\n", tables.join(", "))
                     },
-                    if columns.is_empty() {
+                    c = if columns.is_empty() {
                         "".into()
                     } else {
                         format_sstr!(
@@ -95,7 +93,7 @@ impl fmt::Display for Entry {
                                 .join(", ")
                         )
                     },
-                    if dependencies.is_empty() {
+                    d = if dependencies.is_empty() {
                         "".into()
                     } else {
                         format_sstr!(
@@ -106,14 +104,14 @@ impl fmt::Display for Entry {
                                 .join(", ")
                         )
                     },
-                    if sequences.is_empty() {
+                    s = if sequences.is_empty() {
                         "".into()
                     } else {
                         format_sstr!(
                             "\tsequences: {}\n",
                             sequences
                                 .iter()
-                                .map(|(k, (a, b))| format_sstr!("{} {} {}", k, a, b))
+                                .map(|(k, (a, b))| format_sstr!("{k} {a} {b}"))
                                 .join(", ")
                         )
                     }
@@ -128,22 +126,20 @@ impl fmt::Display for Entry {
             } => {
                 write!(
                     f,
-                    "local\n\tsudo: {}\n\tdest: {}\n\tpaths: {}\n{}{}",
-                    require_sudo,
-                    destination.as_str(),
-                    backup_paths.iter().map(|p| p.to_string_lossy()).join(", "),
-                    if command_output.is_empty() {
+                    "local\n\tsudo: {require_sudo}\n\tdest: {destination}\n\tpaths: {bp}\n{cm}{ex}",
+                    bp = backup_paths.iter().map(|p| p.to_string_lossy()).join(", "),
+                    cm = if command_output.is_empty() {
                         "".into()
                     } else {
                         format_sstr!(
                             "\tcommand: {}\n",
                             command_output
                                 .iter()
-                                .map(|(a, b)| format_sstr!("{} {}", a, b))
+                                .map(|(a, b)| format_sstr!("{a} {b}"))
                                 .join(", ")
                         )
                     },
-                    if exclude.is_empty() {
+                    ex = if exclude.is_empty() {
                         "".into()
                     } else {
                         format_sstr!("\texclude: {}\n", exclude.join(", "))
@@ -151,7 +147,7 @@ impl fmt::Display for Entry {
                 )
             }
             Self::FullPostgresBackup { destination } => {
-                write!(f, "full_postgres_backup {}", destination.as_str())
+                write!(f, "full_postgres_backup {destination}")
             }
         }
     }
@@ -303,7 +299,7 @@ impl UrlWrapper {
                 })
                 .collect();
             let sysid = String::from_utf8(sysid)?;
-            let sysid = format_sstr!("{}_{}", sysid, date);
+            let sysid = format_sstr!("{sysid}_{date}");
             Ok(s.replace("SYSID", &sysid).into())
         } else {
             Ok(s.into())
@@ -421,16 +417,14 @@ mod tests {
             })
             .collect();
         let sysid = String::from_utf8(sysid)?;
-        let sysid = format_sstr!("{}_{}", sysid, date);
+        let sysid = format_sstr!("{sysid}_{date}");
 
         create_dir_all(home_dir.join("test_backup_app"))?;
 
         let backup_paths = vec![home_dir.join("test_backup_app")];
         let destination = format_sstr!(
-            "file://{}/temp_{}_{}.tar.gz",
-            home_dir.to_string_lossy(),
-            sysid,
-            date
+            "file://{h}/temp_{sysid}_{date}.tar.gz",
+            h = home_dir.to_string_lossy()
         )
         .as_str()
         .try_into()?;

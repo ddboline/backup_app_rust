@@ -30,7 +30,7 @@ regex = "1.4"
 deadqueue = "0.2"
 itertools = "0.10"
 flate2 = "1.0"
-tokio = { version="1.2", features=["full"]}
+tokio = { version="1.17", features=["full"]}
 log = "0.4"
 env_logger = "0.9"
 tempfile = "3.2"
@@ -43,7 +43,7 @@ sts_profile_auth = "0.6"
 parking_lot = "0.12"
 num_cpus = "1.13"
 rayon = "1.5"
-stack-string = "0.5"
+stack-string = "0.6"
 
 [[bin]]
 name = "backup-app-rust"

@@ -178,19 +178,19 @@ impl TryFrom<EntryToml> for Entry {
         let full_postgres_backup = entry.full_postgres_backup.unwrap_or(false);
         let sequences = entry
             .sequences
-            .unwrap_or_else(HashMap::new)
+            .unwrap_or_default()
             .into_iter()
             .map(|(k, v)| (k.into(), v))
             .collect();
-        let command_output = entry.command_output.unwrap_or_else(Vec::new);
-        let exclude = entry.exclude.unwrap_or_else(Vec::new);
+        let command_output = entry.command_output.unwrap_or_default();
+        let exclude = entry.exclude.unwrap_or_default();
         if full_postgres_backup {
             return Ok(Self::FullPostgresBackup { destination });
         } else if let Some(database_url) = entry.database_url {
             if let Some(tables) = entry.tables {
                 let dependencies = entry
                     .dependencies
-                    .unwrap_or_else(HashMap::new)
+                    .unwrap_or_default()
                     .into_iter()
                     .map(|(k, mut v)| {
                         v.sort();

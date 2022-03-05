@@ -6,6 +6,7 @@
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::cognitive_complexity)]
+#![allow(clippy::return_self_not_must_use)]
 
 pub mod backup_opts;
 pub mod config;

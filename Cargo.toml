@@ -1,6 +1,6 @@
 [package]
 name = "backup_app_rust"
-version = "0.2.11"
+version = "0.2.12"
 authors = ["Daniel Boline <ddboline@gmail.com>"]
 edition = "2018"
 
@@ -43,7 +43,7 @@ sts_profile_auth = "0.6"
 parking_lot = "0.12"
 num_cpus = "1.13"
 rayon = "1.5"
-stack-string = "0.6"
+stack-string = "0.7"
 
 [[bin]]
 name = "backup-app-rust"

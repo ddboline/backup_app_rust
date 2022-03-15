@@ -24,6 +24,8 @@ lazy_static! {
 pub struct Config(Vec<(StackString, Entry)>);
 
 impl Config {
+    /// # Errors
+    /// Returns error if reading file fails or if parsing toml fails
     pub fn new(p: &Path) -> Result<Self, Error> {
         let data = fs::read(p)?;
         let config: ConfigToml = toml::from_slice(&data)?;

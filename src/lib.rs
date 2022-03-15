@@ -1,12 +1,7 @@
-#![allow(clippy::must_use_candidate)]
-#![allow(clippy::too_many_lines)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::cast_precision_loss)]
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::cast_possible_truncation)]
-#![allow(clippy::missing_errors_doc)]
-#![allow(clippy::cognitive_complexity)]
-#![allow(clippy::return_self_not_must_use)]
 
 pub mod backup_opts;
 pub mod config;
@@ -20,6 +15,8 @@ use rand::{
 use std::{future::Future, time::Duration};
 use tokio::time::sleep;
 
+/// # Errors
+/// Return error if callback function returns error after timeout
 pub async fn exponential_retry<T, U, F>(f: T) -> Result<U, Error>
 where
     T: Fn() -> F,

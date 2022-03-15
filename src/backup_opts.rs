@@ -101,6 +101,11 @@ pub struct BackupOpts {
 }
 
 impl BackupOpts {
+    /// # Errors
+    /// Return error:
+    ///     * if config init fails
+    ///     * if threadpool build fails
+    ///     * if worker tasks return error or panic
     pub async fn process_args() -> Result<(), Error> {
         let opts = Self::from_args();
         if !opts.config_file.exists() {

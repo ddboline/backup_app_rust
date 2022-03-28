@@ -9,9 +9,7 @@ use std::{
     borrow::Cow,
     collections::HashMap,
     convert::{TryFrom, TryInto},
-    fmt,
-    fmt::Write,
-    fs,
+    fmt, fs,
     path::{Path, PathBuf},
 };
 use url::Url;
@@ -333,7 +331,6 @@ mod tests {
     use stack_string::{format_sstr, StackString};
     use std::{
         convert::TryInto,
-        fmt::Write,
         fs::{create_dir_all, remove_dir_all},
     };
 

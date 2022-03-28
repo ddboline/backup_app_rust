@@ -8,7 +8,6 @@ use log::{debug, error};
 use stack_string::{format_sstr, StackString};
 use std::{
     collections::{BTreeSet, HashMap},
-    fmt::Write,
     future::Future,
     path::{Path, PathBuf},
     process::Stdio,
@@ -154,6 +153,72 @@ async fn worker_task(queue: &Queue<Option<BackupEntry>>) -> Result<(), Error> {
     Ok(())
 }
 
+async fn full_backup(destination: &Url) -> Result<(), Error> {
+    assert!(destination.scheme() == "file");
+    let destination_path: PathBuf = destination.path().into();
+    run_pg_dumpall(destination_path).await
+}
+
+async fn run_postgres_backup(
+    database_url: &Url,
+    destination: &Url,
+    tables: &[StackString],
+    columns: &HashMap<StackString, Vec<StackString>>,
+) -> Result<(), Error> {
+    let futures = tables.iter().map(|table| async move {
+        let empty = Vec::new();
+        let columns = columns.get(table).unwrap_or(&empty);
+        backup_table(database_url, destination, table, columns).await?;
+        Ok(())
+    });
+    let results: Result<Vec<_>, Error> = try_join_all(futures).await;
+    results?;
+    Ok(())
+}
+
+async fn run_postgres_restore(
+    database_url: &Url,
+    destination: &Url,
+    tables: &[StackString],
+    columns: &HashMap<StackString, Vec<StackString>>,
+    dependencies: &HashMap<StackString, Vec<StackString>>,
+    sequences: &HashMap<StackString, (StackString, StackString)>,
+) -> Result<(), Error> {
+    let full_deps = get_full_deps(tables, columns.keys(), dependencies);
+
+    let mut parents_graph = get_parent_graph(&full_deps);
+    for t in full_deps.keys() {
+        if !parents_graph.contains_key(t.as_str()) {
+            parents_graph.entry(t.as_str()).or_default();
+        }
+    }
+
+    process_tasks(&full_deps, |t| {
+        let t: StackString = t.into();
+        async move {
+            clear_table(database_url, &t).await?;
+            Ok(())
+        }
+    })
+    .await?;
+
+    println!("finished clearing");
+
+    process_tasks(&parents_graph, |t| {
+        let empty = Vec::new();
+        let columns = columns.get(t).unwrap_or(&empty).clone();
+        let t: StackString = t.into();
+        async move {
+            restore_table(database_url, destination, &t, &columns).await?;
+            Ok(())
+        }
+    })
+    .await?;
+
+    restore_sequences(database_url, sequences).await?;
+    Ok(())
+}
+
 async fn process_entry(backup_entry: &BackupEntry) -> Result<(), Error> {
     let key = &backup_entry.key;
     let entry = &backup_entry.entry;
@@ -163,9 +228,7 @@ async fn process_entry(backup_entry: &BackupEntry) -> Result<(), Error> {
         }
         BackupCommand::Backup => match entry {
             Entry::FullPostgresBackup { destination } => {
-                assert!(destination.scheme() == "file");
-                let destination_path: PathBuf = destination.path().into();
-                run_pg_dumpall(destination_path).await?;
+                full_backup(destination).await?;
                 println!("Finished full_postgres_backup {}", key);
             }
             Entry::Postgres {
@@ -175,14 +238,7 @@ async fn process_entry(backup_entry: &BackupEntry) -> Result<(), Error> {
                 columns,
                 ..
             } => {
-                let futures = tables.iter().map(|table| async move {
-                    let empty = Vec::new();
-                    let columns = columns.get(table).unwrap_or(&empty);
-                    backup_table(database_url, destination, table, columns).await?;
-                    Ok(())
-                });
-                let results: Result<Vec<_>, Error> = try_join_all(futures).await;
-                results?;
+                run_postgres_backup(database_url, destination, tables, columns).await?;
                 println!("Finished postgres_backup {}", key);
             }
             Entry::Local {
@@ -218,38 +274,15 @@ async fn process_entry(backup_entry: &BackupEntry) -> Result<(), Error> {
                 dependencies,
                 sequences,
             } => {
-                let full_deps = get_full_deps(tables, columns.keys(), dependencies);
-
-                let mut parents_graph = get_parent_graph(&full_deps);
-                for t in full_deps.keys() {
-                    if !parents_graph.contains_key(t.as_str()) {
-                        parents_graph.entry(t.as_str()).or_default();
-                    }
-                }
-
-                process_tasks(&full_deps, |t| {
-                    let t: StackString = t.into();
-                    async move {
-                        clear_table(database_url, &t).await?;
-                        Ok(())
-                    }
-                })
+                run_postgres_restore(
+                    database_url,
+                    destination,
+                    tables,
+                    columns,
+                    dependencies,
+                    sequences,
+                )
                 .await?;
-
-                println!("finished clearing");
-
-                process_tasks(&parents_graph, |t| {
-                    let empty = Vec::new();
-                    let columns = columns.get(t).unwrap_or(&empty).clone();
-                    let t: StackString = t.into();
-                    async move {
-                        restore_table(database_url, destination, &t, &columns).await?;
-                        Ok(())
-                    }
-                })
-                .await?;
-
-                restore_sequences(database_url, sequences).await?;
                 println!("Finished postgres_restore {}", key);
             }
             Entry::Local {
@@ -863,7 +896,6 @@ mod tests {
     use stack_string::{format_sstr, StackString};
     use std::{
         collections::{BTreeSet, HashMap},
-        fmt::Write,
         sync::Arc,
     };
     use tokio::sync::Mutex;

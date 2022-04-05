@@ -37,3 +37,15 @@ where
         }
     }
 }
+
+use time::{macros::format_description, OffsetDateTime};
+
+pub(crate) fn current_date_str() -> String {
+    match OffsetDateTime::now_utc()
+        .date()
+        .format(format_description!("[year][month][day]"))
+    {
+        Ok(t) => t,
+        Err(_) => unreachable!(),
+    }
+}

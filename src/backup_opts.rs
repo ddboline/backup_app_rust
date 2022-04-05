@@ -891,13 +891,13 @@ fn topological_sort(
 #[cfg(test)]
 mod tests {
     use anyhow::Error;
-    use chrono::Utc;
     use maplit::{btreeset, hashmap};
     use stack_string::{format_sstr, StackString};
     use std::{
         collections::{BTreeSet, HashMap},
         sync::Arc,
     };
+    use time::OffsetDateTime;
     use tokio::sync::Mutex;
 
     use crate::backup_opts::{process_tasks, spawn_threadpool, topological_sort, BackupCommand};
@@ -980,15 +980,15 @@ mod tests {
 
     #[tokio::test]
     async fn test_spawn_threadpool() -> Result<(), Error> {
-        let start_time = Utc::now();
+        let start_time = OffsetDateTime::now_utc();
         let task = spawn_threadpool(move || {
             std::thread::sleep(std::time::Duration::from_millis(1000));
             25
         });
         assert_eq!(task.await?, 25);
-        let duration = Utc::now() - start_time;
-        println!("{}", duration.num_milliseconds());
-        assert!(duration.num_milliseconds() >= 1000);
+        let duration = OffsetDateTime::now_utc() - start_time;
+        println!("{}", duration.whole_milliseconds());
+        assert!(duration.whole_milliseconds() >= 1000);
         Ok(())
     }
 }

@@ -1,5 +1,4 @@
 use anyhow::{format_err, Error};
-use chrono::Utc;
 use derive_more::{Deref, DerefMut, Into, IntoIterator};
 use itertools::Itertools;
 use lazy_static::lazy_static;
@@ -13,6 +12,8 @@ use std::{
     path::{Path, PathBuf},
 };
 use url::Url;
+
+use crate::current_date_str;
 
 lazy_static! {
     pub static ref HOME: PathBuf = dirs::home_dir().expect("No Home Directory");
@@ -278,8 +279,7 @@ pub struct UrlWrapper(Url);
 impl UrlWrapper {
     fn replace_date(s: &str) -> Cow<str> {
         if s.contains("DATE") {
-            let date = StackString::from_display(Utc::now().format("%Y%m%d"));
-            s.replace("DATE", &date).into()
+            s.replace("DATE", &current_date_str()).into()
         } else {
             s.into()
         }
@@ -287,7 +287,7 @@ impl UrlWrapper {
 
     fn replace_sysid(s: &str) -> Result<Cow<str>, Error> {
         if s.contains("SYSID") {
-            let date = Utc::now().format("%Y%m%d");
+            let date = current_date_str();
             let sysid: Vec<u8> = std::process::Command::new("uname")
                 .args(&["-snrmpio"])
                 .output()?
@@ -325,16 +325,18 @@ impl TryFrom<&str> for UrlWrapper {
 #[cfg(test)]
 mod tests {
     use anyhow::Error;
-    use chrono::Utc;
     use log::debug;
     use maplit::hashmap;
-    use stack_string::{format_sstr, StackString};
+    use stack_string::format_sstr;
     use std::{
         convert::TryInto,
         fs::{create_dir_all, remove_dir_all},
     };
 
-    use crate::config::{Config, ConfigToml, EntryToml, UrlWrapper};
+    use crate::{
+        config::{Config, ConfigToml, EntryToml, UrlWrapper},
+        current_date_str,
+    };
 
     #[test]
     fn test_config() -> Result<(), Error> {
@@ -403,8 +405,7 @@ mod tests {
             dependencies: Some(dependencies),
             ..EntryToml::default()
         };
-
-        let date = StackString::from_display(Utc::now().format("%Y%m%d"));
+        let date = current_date_str();
         let sysid: Vec<u8> = std::process::Command::new("uname")
             .args(&["-snrmpio"])
             .output()?

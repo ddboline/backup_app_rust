@@ -1,6 +1,6 @@
 [package]
 name = "backup_app_rust"
-version = "0.2.14"
+version = "0.2.15"
 authors = ["Daniel Boline <ddboline@gmail.com>"]
 edition = "2018"
 
@@ -36,10 +36,10 @@ env_logger = "0.9"
 tempfile = "3.2"
 rand = "0.8"
 futures = "0.3"
-rusoto_core = {version = "0.47", default_features = false, features=["rustls"]}
-rusoto_s3 = {version = "0.47", default_features = false, features=["rustls"]}
-s3-ext = "0.4"
-sts_profile_auth = "0.6"
+rusoto_core = {version = "0.48", default_features = false, features=["rustls"]}
+rusoto_s3 = {version = "0.48", default_features = false, features=["rustls"]}
+s3-ext = "0.5"
+sts_profile_auth = "0.7"
 parking_lot = "0.12"
 num_cpus = "1.13"
 rayon = "1.5"

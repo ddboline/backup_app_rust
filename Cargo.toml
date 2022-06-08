@@ -1,6 +1,6 @@
 [package]
 name = "backup_app_rust"
-version = "0.2.15"
+version = "0.2.16"
 authors = ["Daniel Boline <ddboline@gmail.com>"]
 edition = "2018"
 
@@ -30,7 +30,7 @@ regex = "1.4"
 deadqueue = "0.2"
 itertools = "0.10"
 flate2 = "1.0"
-tokio = { version="1.17", features=["full"]}
+tokio = { version="1.19", features=["full"]}
 log = "0.4"
 env_logger = "0.9"
 tempfile = "3.2"

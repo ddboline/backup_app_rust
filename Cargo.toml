@@ -44,6 +44,9 @@ num_cpus = "1.13"
 rayon = "1.5"
 stack-string = "0.7"
 
+[dev-dependencies]
+maplit = "1.0"
+
 [[bin]]
 name = "backup-app-rust"
 path = "src/main.rs"

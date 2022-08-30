@@ -19,7 +19,7 @@ lazy_static! {
     pub static ref HOME: PathBuf = dirs::home_dir().expect("No Home Directory");
 }
 
-#[derive(Debug, PartialEq, IntoIterator, Deref, DerefMut)]
+#[derive(Debug, PartialEq, IntoIterator, Deref, DerefMut, Eq)]
 pub struct Config(Vec<(StackString, Entry)>);
 
 impl Config {
@@ -41,7 +41,7 @@ impl fmt::Display for Config {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Entry {
     Postgres {
         database_url: Url,
@@ -272,7 +272,7 @@ struct EntryToml {
     exclude: Option<Vec<StackString>>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Into, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, Into, PartialEq, Eq)]
 #[serde(into = "String", try_from = "&str")]
 pub struct UrlWrapper(Url);
 

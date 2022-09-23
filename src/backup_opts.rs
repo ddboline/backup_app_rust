@@ -1,4 +1,5 @@
 use anyhow::{format_err, Error};
+use clap::Parser;
 use deadqueue::unlimited::Queue;
 use derive_more::{Deref, Display};
 use flate2::{read::GzDecoder, Compression, GzBuilder};
@@ -14,7 +15,6 @@ use std::{
     str::FromStr,
     sync::Arc,
 };
-use structopt::StructOpt;
 use tempfile::NamedTempFile;
 use tokio::{
     fs::File,
@@ -87,15 +87,15 @@ impl BackupQueue {
     }
 }
 
-#[derive(StructOpt)]
+#[derive(Parser)]
 pub struct BackupOpts {
     /// list, backup, restore, clear
     pub command: BackupCommand,
-    #[structopt(short = "f", long)]
+    #[clap(short = 'f', long)]
     pub config_file: PathBuf,
-    #[structopt(short, long)]
+    #[clap(short, long)]
     pub key: Option<StackString>,
-    #[structopt(short, long)]
+    #[clap(short, long)]
     pub num_workers: Option<usize>,
 }
 

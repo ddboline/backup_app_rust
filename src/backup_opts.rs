@@ -3,7 +3,7 @@ use clap::Parser;
 use deadqueue::unlimited::Queue;
 use derive_more::{Deref, Display};
 use flate2::{read::GzDecoder, Compression, GzBuilder};
-use futures::future::try_join_all;
+use futures::{stream::FuturesUnordered, TryStreamExt};
 use itertools::Itertools;
 use log::{debug, error};
 use stack_string::{format_sstr, StackString};
@@ -106,7 +106,7 @@ impl BackupOpts {
     ///     * if threadpool build fails
     ///     * if worker tasks return error or panic
     pub async fn process_args() -> Result<(), Error> {
-        let opts = Self::from_args();
+        let opts = Self::parse();
         if !opts.config_file.exists() {
             return Err(format_err!(
                 "Config file {} does not exist",
@@ -165,15 +165,13 @@ async fn run_postgres_backup(
     tables: &[StackString],
     columns: &HashMap<StackString, Vec<StackString>>,
 ) -> Result<(), Error> {
-    let futures = tables.iter().map(|table| async move {
+    let futures: FuturesUnordered<_> = tables.iter().map(|table| async move {
         let empty = Vec::new();
         let columns = columns.get(table).unwrap_or(&empty);
         backup_table(database_url, destination, table, columns).await?;
         Ok(())
-    });
-    let results: Result<Vec<_>, Error> = try_join_all(futures).await;
-    results?;
-    Ok(())
+    }).collect();
+    futures.try_collect().await
 }
 
 async fn run_postgres_restore(
@@ -823,7 +821,7 @@ where
         }
     }
 
-    let futures = tasks.into_iter().map(|(table, node)| async move {
+    let futures: FuturesUnordered<_> = tasks.into_iter().map(|(table, node)| async move {
         for mut recv in node.recvs {
             let r = recv
                 .recv()
@@ -837,11 +835,8 @@ where
             send.send(table.into()).await?;
         }
         Ok(())
-    });
-    let results: Result<Vec<_>, Error> = try_join_all(futures).await;
-    results?;
-
-    Ok(())
+    }).collect();
+    futures.try_collect().await
 }
 
 fn get_parent_graph(

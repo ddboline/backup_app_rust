@@ -1,6 +1,6 @@
 [package]
 name = "backup_app_rust"
-version = "0.2.20"
+version = "0.3.0"
 authors = ["Daniel Boline <ddboline@gmail.com>"]
 edition = "2018"
 
@@ -31,7 +31,7 @@ itertools = "0.10"
 flate2 = "1.0"
 tokio = { version="1.21", features=["full"]}
 log = "0.4"
-env_logger = "0.9"
+env_logger = "0.10"
 tempfile = "3.2"
 rand = "0.8"
 futures = "0.3"
@@ -42,7 +42,7 @@ sts_profile_auth = "0.7"
 parking_lot = "0.12"
 num_cpus = "1.13"
 rayon = "1.5"
-stack-string = "0.7"
+stack-string = "0.8"
 
 [dev-dependencies]
 maplit = "1.0"

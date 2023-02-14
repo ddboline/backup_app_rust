@@ -165,12 +165,15 @@ async fn run_postgres_backup(
     tables: &[StackString],
     columns: &HashMap<StackString, Vec<StackString>>,
 ) -> Result<(), Error> {
-    let futures: FuturesUnordered<_> = tables.iter().map(|table| async move {
-        let empty = Vec::new();
-        let columns = columns.get(table).unwrap_or(&empty);
-        backup_table(database_url, destination, table, columns).await?;
-        Ok(())
-    }).collect();
+    let futures: FuturesUnordered<_> = tables
+        .iter()
+        .map(|table| async move {
+            let empty = Vec::new();
+            let columns = columns.get(table).unwrap_or(&empty);
+            backup_table(database_url, destination, table, columns).await?;
+            Ok(())
+        })
+        .collect();
     futures.try_collect().await
 }
 
@@ -222,12 +225,12 @@ async fn process_entry(backup_entry: &BackupEntry) -> Result<(), Error> {
     let entry = &backup_entry.entry;
     match backup_entry.command {
         BackupCommand::List => {
-            println!("{} {}", key, entry);
+            println!("{key} {entry}");
         }
         BackupCommand::Backup => match entry {
             Entry::FullPostgresBackup { destination } => {
                 full_backup(destination).await?;
-                println!("Finished full_postgres_backup {}", key);
+                println!("Finished full_postgres_backup {key}");
             }
             Entry::Postgres {
                 database_url,
@@ -237,7 +240,7 @@ async fn process_entry(backup_entry: &BackupEntry) -> Result<(), Error> {
                 ..
             } => {
                 run_postgres_backup(database_url, destination, tables, columns).await?;
-                println!("Finished postgres_backup {}", key);
+                println!("Finished postgres_backup {key}");
             }
             Entry::Local {
                 require_sudo,
@@ -254,7 +257,7 @@ async fn process_entry(backup_entry: &BackupEntry) -> Result<(), Error> {
                     exclude,
                 )
                 .await?;
-                println!("Finished local {}", key);
+                println!("Finished local {key}");
             }
         },
         BackupCommand::Restore => match entry {
@@ -262,7 +265,7 @@ async fn process_entry(backup_entry: &BackupEntry) -> Result<(), Error> {
                 assert!(destination.scheme() == "file");
                 let destination_path: PathBuf = destination.path().into();
                 run_pg_restore(destination_path).await?;
-                println!("Finished restore full_postgres_backup {}", key);
+                println!("Finished restore full_postgres_backup {key}");
             }
             Entry::Postgres {
                 database_url,
@@ -281,7 +284,7 @@ async fn process_entry(backup_entry: &BackupEntry) -> Result<(), Error> {
                     sequences,
                 )
                 .await?;
-                println!("Finished postgres_restore {}", key);
+                println!("Finished postgres_restore {key}");
             }
             Entry::Local {
                 require_sudo,
@@ -289,7 +292,7 @@ async fn process_entry(backup_entry: &BackupEntry) -> Result<(), Error> {
                 ..
             } => {
                 run_local_restore(*require_sudo, destination).await?;
-                println!("Finished local_restore {}", key);
+                println!("Finished local_restore {key}");
             }
         },
         BackupCommand::Clear => {
@@ -398,7 +401,7 @@ async fn run_local_backup(
 
     if require_sudo {
         let output = Command::new("sudo")
-            .args(&["chown", &format_sstr!("{user}:{user}"), destination])
+            .args(["chown", &format_sstr!("{user}:{user}"), destination])
             .output()
             .await?;
         if !output.stdout.is_empty() {
@@ -463,7 +466,7 @@ async fn backup_table(
     };
 
     let mut p = Command::new("psql")
-        .args(&[database_url.as_str(), "-c", &query])
+        .args([database_url.as_str(), "-c", &query])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()?;
@@ -495,7 +498,7 @@ async fn restore_sequences(
 ) -> Result<(), Error> {
     for (seq, (table, id)) in sequences {
         let output = Command::new("psql")
-            .args(&[
+            .args([
                 database_url.as_str(),
                 "-c",
                 &format_sstr!("SELECT setval('{seq}', (SELECT max({id}) FROM {table}), TRUE)"),
@@ -515,7 +518,7 @@ async fn restore_sequences(
 
 async fn clear_table(database_url: &Url, table: &str) -> Result<(), Error> {
     let output = Command::new("psql")
-        .args(&[
+        .args([
             database_url.as_str(),
             "-c",
             &format_sstr!("DELETE FROM {table}"),
@@ -561,7 +564,7 @@ async fn restore_table(
     };
 
     let mut p = Command::new("psql")
-        .args(&[database_url.as_str(), "-c", &query])
+        .args([database_url.as_str(), "-c", &query])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .stdin(Stdio::piped())
@@ -590,7 +593,7 @@ async fn restore_table(
 
 async fn run_pg_dumpall(destination_path: PathBuf) -> Result<(), Error> {
     let mut p = Command::new("sudo")
-        .args(&["-u", "postgres", "/usr/bin/pg_dumpall"])
+        .args(["-u", "postgres", "/usr/bin/pg_dumpall"])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()?;
@@ -609,7 +612,7 @@ async fn run_pg_dumpall(destination_path: PathBuf) -> Result<(), Error> {
 
 async fn run_pg_restore(destination_path: PathBuf) -> Result<(), Error> {
     let mut p = Command::new("sudo")
-        .args(&["-u", "postgres", "/usr/bin/pg_restore"])
+        .args(["-u", "postgres", "/usr/bin/pg_restore"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -689,7 +692,7 @@ fn read_from_gzip(input_path: &Path, send: &Sender<Vec<u8>>) -> Result<(), Error
         io::{ErrorKind, Read},
     };
 
-    let input_file = File::open(&input_path)?;
+    let input_file = File::open(input_path)?;
     let mut gz = GzDecoder::new(input_file);
 
     loop {
@@ -762,7 +765,7 @@ fn write_to_gzip(output_path: &Path, mut recv: Receiver<Vec<u8>>) -> Result<(), 
         .ok_or_else(|| format_err!("No file name"))?
         .to_string_lossy()
         .into_owned();
-    let output_file = File::create(&output_path)?;
+    let output_file = File::create(output_path)?;
     let mut gz = GzBuilder::new()
         .filename(file_name)
         .write(output_file, Compression::default());
@@ -821,21 +824,24 @@ where
         }
     }
 
-    let futures: FuturesUnordered<_> = tasks.into_iter().map(|(table, node)| async move {
-        for mut recv in node.recvs {
-            let r = recv
-                .recv()
-                .await
-                .ok_or_else(|| format_err!("Channel dropped"))?;
-            debug!("recv {} {}", r, table);
-        }
-        node.task.await?;
-        for send in node.sends {
-            debug!("send {}", table);
-            send.send(table.into()).await?;
-        }
-        Ok(())
-    }).collect();
+    let futures: FuturesUnordered<_> = tasks
+        .into_iter()
+        .map(|(table, node)| async move {
+            for mut recv in node.recvs {
+                let r = recv
+                    .recv()
+                    .await
+                    .ok_or_else(|| format_err!("Channel dropped"))?;
+                debug!("recv {} {}", r, table);
+            }
+            node.task.await?;
+            for send in node.sends {
+                debug!("send {}", table);
+                send.send(table.into()).await?;
+            }
+            Ok(())
+        })
+        .collect();
     futures.try_collect().await
 }
 

@@ -1,6 +1,6 @@
 [package]
 name = "backup_app_rust"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["Daniel Boline <ddboline@gmail.com>"]
 edition = "2018"
 
@@ -15,7 +15,7 @@ Backup utility written in rust"""
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-toml = "0.5"
+toml = "0.7"
 dirs = "4.0"
 url = "2.2"
 serde = {version="1.0", features=["derive"]}

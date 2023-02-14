@@ -26,8 +26,8 @@ impl Config {
     /// # Errors
     /// Returns error if reading file fails or if parsing toml fails
     pub fn new(p: &Path) -> Result<Self, Error> {
-        let data = fs::read(p)?;
-        let config: ConfigToml = toml::from_slice(&data)?;
+        let data = fs::read_to_string(p)?;
+        let config: ConfigToml = toml::from_str(&data)?;
         config.try_into()
     }
 }
@@ -35,7 +35,7 @@ impl Config {
 impl fmt::Display for Config {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for (k, v) in &self.0 {
-            writeln!(f, "{}: {}", k, v)?;
+            writeln!(f, "{k}: {v}")?;
         }
         Ok(())
     }
@@ -273,7 +273,7 @@ struct EntryToml {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Into, PartialEq, Eq)]
-#[serde(into = "String", try_from = "&str")]
+#[serde(into = "String", try_from = "String")]
 pub struct UrlWrapper(Url);
 
 impl UrlWrapper {
@@ -289,7 +289,7 @@ impl UrlWrapper {
         if s.contains("SYSID") {
             let date = current_date_str();
             let sysid: Vec<u8> = std::process::Command::new("uname")
-                .args(&["-snrmpio"])
+                .args(["-snrmpio"])
                 .output()?
                 .stdout
                 .into_iter()
@@ -319,6 +319,13 @@ impl TryFrom<&str> for UrlWrapper {
         let s = UrlWrapper::replace_date(item);
         let url: Url = UrlWrapper::replace_sysid(&s)?.parse()?;
         Ok(Self(url))
+    }
+}
+
+impl TryFrom<String> for UrlWrapper {
+    type Error = Error;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        value.as_str().try_into()
     }
 }
 
@@ -450,6 +457,7 @@ mod tests {
         let data = include_str!("../tests/data/test_config.toml")
             .replace("HOME", &home_dir.to_string_lossy());
         let config_file: ConfigToml = toml::from_str(&data)?;
+
         let mut config_file: Config = config_file.try_into()?;
         config_file.sort_by(|x, y| x.0.cmp(&y.0));
         debug!("{}", config_file.len());

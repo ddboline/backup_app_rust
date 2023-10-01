@@ -37,7 +37,7 @@ jobs:
       run: |
         cargo test --verbose && \
         cargo install cargo-tarpaulin && \
-        cargo tarpaulin --verbose --all-features --workspace --out Xml
+        cargo tarpaulin --verbose --all-features --workspace --out xml
 
     - name: Upload to codecov.io
       uses: codecov/codecov-action@v2.1.0

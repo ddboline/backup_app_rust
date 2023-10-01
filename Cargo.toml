@@ -1,6 +1,6 @@
 [package]
 name = "backup_app_rust"
-version = "0.3.2"
+version = "0.4.0"
 authors = ["Daniel Boline <ddboline@gmail.com>"]
 edition = "2018"
 
@@ -15,34 +15,31 @@ Backup utility written in rust"""
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-toml = "0.7"
+anyhow = "1.0"
+aws-config = "0.56"
+aws-sdk-s3 = "0.31"
+clap = {version="4.0", features=["derive"]}
+deadqueue = "0.2"
+derive_more = "0.99"
 dirs = "5.0"
-url = "2.2"
+env_logger = "0.10"
+flate2 = "1.0"
+futures = "0.3"
+itertools = "0.11"
+lazy_static = "1.4"
+log = "0.4"
+num_cpus = "1.13"
+parking_lot = "0.12"
+rand = "0.8"
+rayon = "1.5"
 serde = {version="1.0", features=["derive"]}
 serde_json = "1.0"
-anyhow = "1.0"
-derive_more = "0.99"
-lazy_static = "1.4"
-clap = {version="4.0", features=["derive"]}
-time = {version="0.3", features=["serde-human-readable", "macros", "formatting"]}
-regex = "1.4"
-deadqueue = "0.2"
-itertools = "0.11"
-flate2 = "1.0"
-tokio = { version="1.21", features=["full"]}
-log = "0.4"
-env_logger = "0.10"
-tempfile = "3.2"
-rand = "0.8"
-futures = "0.3"
-rusoto_core = {version = "0.48", default_features = false, features=["rustls"]}
-rusoto_s3 = {version = "0.48", default_features = false, features=["rustls"]}
-s3-ext = "0.5"
-sts_profile_auth = "0.7"
-parking_lot = "0.12"
-num_cpus = "1.13"
-rayon = "1.5"
 stack-string = "0.8"
+tempfile = "3.2"
+time = {version="0.3", features=["serde-human-readable", "macros", "formatting"]}
+tokio = { version="1.21", features=["full"]}
+toml = "0.8"
+url = "2.2"
 
 [dev-dependencies]
 maplit = "1.0"

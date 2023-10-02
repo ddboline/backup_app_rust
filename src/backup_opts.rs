@@ -482,7 +482,8 @@ async fn backup_table(
     stderr_task.await??;
 
     if destination.scheme() == "s3" {
-        let s3 = S3Instance::default();
+        let sdk_config = aws_config::load_from_env().await;
+        let s3 = S3Instance::new(&sdk_config);
         let bucket = destination
             .host_str()
             .ok_or_else(|| format_err!("Parse error"))?;
@@ -544,7 +545,8 @@ async fn restore_table(
     let destination_path = if destination.scheme() == "file" {
         Path::new(destination.path()).join(format_sstr!("{table}.sql.gz"))
     } else {
-        let s3 = S3Instance::default();
+        let sdk_config = aws_config::load_from_env().await;
+        let s3 = S3Instance::new(&sdk_config);
         let bucket = destination
             .host_str()
             .ok_or_else(|| format_err!("Parse error"))?;

@@ -32,16 +32,6 @@ impl fmt::Debug for S3Instance {
     }
 }
 
-impl Default for S3Instance {
-    fn default() -> Self {
-        let sdk_config = SdkConfig::builder().build();
-        Self {
-            s3_client: S3Client::from_conf((&sdk_config).into()),
-            max_keys: None,
-        }
-    }
-}
-
 impl S3Instance {
     #[must_use]
     pub fn new(sdk_config: &SdkConfig) -> Self {

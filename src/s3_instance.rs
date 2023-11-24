@@ -237,7 +237,7 @@ impl S3Instance {
                     }
                     list_of_keys.extend_from_slice(&contents);
                 }
-                if !output.is_truncated {
+                if output.is_truncated == Some(false) || output.is_truncated.is_none() {
                     break;
                 }
             }
@@ -277,7 +277,7 @@ impl S3Instance {
                     callback(object)?;
                 }
             }
-            if !output.is_truncated {
+            if output.is_truncated == Some(false) || output.is_truncated.is_none() {
                 break;
             }
         }

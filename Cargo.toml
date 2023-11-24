@@ -1,6 +1,6 @@
 [package]
 name = "backup_app_rust"
-version = "0.4.1"
+version = "0.4.2"
 authors = ["Daniel Boline <ddboline@gmail.com>"]
 edition = "2018"
 
@@ -16,8 +16,8 @@ Backup utility written in rust"""
 
 [dependencies]
 anyhow = "1.0"
-aws-config = "0.56"
-aws-sdk-s3 = "0.31"
+aws-config = {version="1.0", features=["behavior-version-latest"]}
+aws-sdk-s3 = "0.39"
 clap = {version="4.0", features=["derive"]}
 deadqueue = "0.2"
 derive_more = "0.99"
@@ -25,7 +25,7 @@ dirs = "5.0"
 env_logger = "0.10"
 flate2 = "1.0"
 futures = "0.3"
-itertools = "0.11"
+itertools = "0.12"
 lazy_static = "1.4"
 log = "0.4"
 num_cpus = "1.13"

@@ -17,7 +17,7 @@ Backup utility written in rust"""
 [dependencies]
 anyhow = "1.0"
 aws-config = {version="1.0", features=["behavior-version-latest"]}
-aws-sdk-s3 = "0.39"
+aws-sdk-s3 = "1.1"
 clap = {version="4.0", features=["derive"]}
 deadqueue = "0.2"
 derive_more = "0.99"
@@ -36,7 +36,7 @@ serde = {version="1.0", features=["derive"]}
 stack-string = "0.8"
 tempfile = "3.2"
 time = {version="0.3", features=["serde-human-readable", "macros", "formatting"]}
-tokio = { version="1.21", features=["full"]}
+tokio = { version="1.21", features=["rt", "macros", "rt-multi-thread"]}
 toml = "0.8"
 url = "2.2"
 

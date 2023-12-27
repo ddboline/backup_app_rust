@@ -1,7 +1,7 @@
 use anyhow::{format_err, Error};
 use derive_more::{Deref, DerefMut, Into, IntoIterator};
 use itertools::Itertools;
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use stack_string::{format_sstr, StackString};
 use std::{
@@ -15,9 +15,7 @@ use url::Url;
 
 use crate::current_date_str;
 
-lazy_static! {
-    pub static ref HOME: PathBuf = dirs::home_dir().expect("No Home Directory");
-}
+pub static HOME: Lazy<PathBuf> = Lazy::new(|| dirs::home_dir().expect("No Home Directory"));
 
 #[derive(Debug, PartialEq, IntoIterator, Deref, DerefMut, Eq)]
 pub struct Config(Vec<(StackString, Entry)>);

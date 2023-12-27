@@ -719,7 +719,7 @@ fn read_from_gzip(input_path: &Path, send: &Sender<Vec<u8>>) -> Result<(), Error
         let mut buf_opt = Some(buf);
         while let Some(buf) = buf_opt.take() {
             match send.try_send(buf) {
-                Ok(_) => {
+                Ok(()) => {
                     break;
                 }
                 Err(TrySendError::Full(buf)) => {

@@ -1,6 +1,6 @@
 [package]
 name = "backup_app_rust"
-version = "0.4.2"
+version = "0.4.3"
 authors = ["Daniel Boline <ddboline@gmail.com>"]
 edition = "2018"
 
@@ -26,9 +26,9 @@ env_logger = "0.10"
 flate2 = "1.0"
 futures = "0.3"
 itertools = "0.12"
-lazy_static = "1.4"
 log = "0.4"
 num_cpus = "1.13"
+once_cell = "1.0"
 parking_lot = "0.12"
 rand = "0.8"
 rayon = "1.5"
@@ -36,7 +36,7 @@ serde = {version="1.0", features=["derive"]}
 stack-string = "0.8"
 tempfile = "3.2"
 time = {version="0.3", features=["serde-human-readable", "macros", "formatting"]}
-tokio = { version="1.21", features=["rt", "macros", "rt-multi-thread"]}
+tokio = { version="1.34", features=["rt", "macros", "rt-multi-thread"]}
 toml = "0.8"
 url = "2.2"
 

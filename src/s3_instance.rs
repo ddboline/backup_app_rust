@@ -6,15 +6,13 @@ use aws_sdk_s3::{
     types::{Bucket, Object},
     Client as S3Client,
 };
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use parking_lot::{Mutex, MutexGuard};
 use std::{fmt, path::Path};
 use tokio::fs::File;
 use url::Url;
 
-lazy_static! {
-    static ref S3INSTANCE_TEST_MUTEX: Mutex<()> = Mutex::new(());
-}
+static S3INSTANCE_TEST_MUTEX: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
 use stack_string::StackString;
 

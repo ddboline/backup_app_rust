@@ -1,6 +1,6 @@
 [package]
 name = "backup_app_rust"
-version = "0.4.5"
+version = "0.4.6"
 authors = ["Daniel Boline <ddboline@gmail.com>"]
 edition = "2018"
 
@@ -9,8 +9,7 @@ name = "backup-app-rust"
 priority = "optional"
 section = "rust"
 provides = "backup-app-rust"
-extended-description = """\
-Backup utility written in rust"""
+extended-description = """Backup utility written in rust"""
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -25,7 +24,7 @@ dirs = "5.0"
 env_logger = {version="0.11", features=["color", "humantime", "regex"], default_features = false}
 flate2 = "1.0"
 futures = "0.3"
-itertools = "0.12"
+itertools = "0.13"
 log = "0.4"
 num_cpus = "1.13"
 once_cell = "1.0"

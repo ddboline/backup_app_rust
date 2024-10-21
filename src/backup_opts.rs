@@ -49,13 +49,13 @@ where
 
 #[derive(Display, Clone, Copy)]
 pub enum BackupCommand {
-    #[display(fmt = "list")]
+    #[display("list")]
     List,
-    #[display(fmt = "backup")]
+    #[display("backup")]
     Backup,
-    #[display(fmt = "restore")]
+    #[display("restore")]
     Restore,
-    #[display(fmt = "clear")]
+    #[display("clear")]
     Clear,
 }
 

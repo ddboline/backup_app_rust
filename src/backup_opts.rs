@@ -380,7 +380,8 @@ async fn run_local_backup(
         output_file.write_all(&output.stdout).await?;
         args.push(output_filename.as_ref().into());
     }
-    let mut p = Command::new(&args[0])
+    let program = &args[0];
+    let mut p = Command::new(program)
         .args(&args[1..])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -395,9 +396,13 @@ async fn run_local_backup(
     let stdout_task: JoinHandle<Result<(), Error>> =
         spawn(async move { output_to_debug(reader, b'\n').await });
 
-    p.wait().await?;
+    let status = p.wait().await?;
     stdout_task.await??;
     stderr_task.await??;
+
+    if !status.success() {
+        println!("{program} returned with {status}");
+    }
 
     if require_sudo {
         let output = Command::new("sudo")
@@ -422,7 +427,8 @@ async fn run_local_restore(require_sudo: bool, destination: &Url) -> Result<(), 
     }
     args.extend_from_slice(&["tar".into(), "zxvf".into(), destination.into()]);
 
-    let mut p = Command::new(&args[0])
+    let program = &args[0];
+    let mut p = Command::new(program)
         .args(&args[1..])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -437,9 +443,13 @@ async fn run_local_restore(require_sudo: bool, destination: &Url) -> Result<(), 
     let stdout_task: JoinHandle<Result<(), Error>> =
         spawn(async move { output_to_debug(reader, b'\n').await });
 
-    p.wait().await?;
+    let status = p.wait().await?;
     stdout_task.await??;
     stderr_task.await??;
+
+    if !status.success() {
+        println!("{program} returned with {status}");
+    }
 
     Ok(())
 }
@@ -477,9 +487,13 @@ async fn backup_table(
         spawn(async move { output_to_error(reader, b'\n').await });
     let stdout_task: JoinHandle<Result<(), Error>> =
         spawn(async move { output_to_gz_file(stdout, &destination_path).await });
-    p.wait().await?;
+    let status = p.wait().await?;
     stdout_task.await??;
     stderr_task.await??;
+
+    if !status.success() {
+        println!("psql returned with {status}");
+    }
 
     if destination.scheme() == "s3" {
         let sdk_config = aws_config::load_from_env().await;
@@ -585,10 +599,14 @@ async fn restore_table(
     let stderr_task: JoinHandle<Result<(), Error>> =
         spawn(async move { output_to_error(reader, b'\n').await });
 
-    p.wait().await?;
+    let status = p.wait().await?;
     stdin_task.await??;
     stdout_task.await??;
     stderr_task.await??;
+
+    if !status.success() {
+        println!("psql returned with {status}");
+    }
 
     Ok(())
 }
@@ -606,9 +624,13 @@ async fn run_pg_dumpall(destination_path: PathBuf) -> Result<(), Error> {
         spawn(async move { output_to_error(reader, b'\n').await });
     let stdout_task: JoinHandle<Result<(), Error>> =
         spawn(async move { output_to_gz_file(stdout, &destination_path).await });
-    p.wait().await?;
+    let status = p.wait().await?;
     stdout_task.await??;
     stderr_task.await??;
+
+    if !status.success() {
+        println!("pg_dumpall returned with {status}");
+    }
     Ok(())
 }
 
@@ -633,9 +655,13 @@ async fn run_pg_restore(destination_path: PathBuf) -> Result<(), Error> {
         spawn(async move { output_to_error(reader, b'\n').await });
 
     stdin_task.await??;
-    p.wait().await?;
+    let status = p.wait().await?;
     stdout_task.await??;
     stderr_task.await??;
+
+    if !status.success() {
+        println!("pg_restore returned with {status}");
+    }
 
     Ok(())
 }

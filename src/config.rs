@@ -47,7 +47,6 @@ pub enum Entry {
         tables: Vec<StackString>,
         columns: HashMap<StackString, Vec<StackString>>,
         dependencies: HashMap<StackString, Vec<StackString>>,
-        sequences: HashMap<StackString, (StackString, StackString)>,
     },
     Local {
         require_sudo: bool,
@@ -71,11 +70,10 @@ impl fmt::Display for Entry {
                 tables,
                 columns,
                 dependencies,
-                sequences,
             } => {
                 write!(
                     f,
-                    "postgres\n\tdb_url: {database_url}\n\tdest: {destination}\n{t}{c}{d}{s}",
+                    "postgres\n\tdb_url: {database_url}\n\tdest: {destination}\n{t}{c}{d}",
                     t = if tables.is_empty() {
                         "".into()
                     } else {
@@ -103,17 +101,6 @@ impl fmt::Display for Entry {
                                 .join(", ")
                         )
                     },
-                    s = if sequences.is_empty() {
-                        "".into()
-                    } else {
-                        format_sstr!(
-                            "\tsequences: {}\n",
-                            sequences
-                                .iter()
-                                .map(|(k, (a, b))| format_sstr!("{k} {a} {b}"))
-                                .join(", ")
-                        )
-                    }
                 )
             }
             Self::Local {
@@ -175,12 +162,6 @@ impl TryFrom<EntryToml> for Entry {
             .into();
         let require_sudo = entry.require_sudo.unwrap_or(false);
         let full_postgres_backup = entry.full_postgres_backup.unwrap_or(false);
-        let sequences = entry
-            .sequences
-            .unwrap_or_default()
-            .into_iter()
-            .map(|(k, v)| (k.into(), v))
-            .collect();
         let command_output = entry.command_output.unwrap_or_default();
         let exclude = entry.exclude.unwrap_or_default();
         if full_postgres_backup {
@@ -213,7 +194,6 @@ impl TryFrom<EntryToml> for Entry {
                         tables,
                         columns,
                         dependencies,
-                        sequences,
                     });
                 }
                 return Ok(Self::Postgres {
@@ -222,7 +202,6 @@ impl TryFrom<EntryToml> for Entry {
                     tables,
                     columns: HashMap::new(),
                     dependencies,
-                    sequences,
                 });
             }
         } else if let Some(backup_paths) = entry.backup_paths {
@@ -265,7 +244,6 @@ struct EntryToml {
     tables: Option<Vec<StackString>>,
     columns: Option<HashMap<String, Vec<StackString>>>,
     dependencies: Option<HashMap<String, Vec<StackString>>>,
-    sequences: Option<HashMap<String, (StackString, StackString)>>,
     command_output: Option<Vec<(StackString, StackString)>>,
     exclude: Option<Vec<StackString>>,
 }
@@ -354,15 +332,11 @@ mod tests {
             "instance_family".into() => vec!["id".into(), "family_name".into()],
         };
         let destination = "s3://aws-app-rust-db-backup".try_into()?;
-        let sequences = hashmap! {
-            "intrusion_log_id_seq".into() => ("intrusion_log".into(), "id".into()),
-        };
         let aws_entry = EntryToml {
             database_url: Some(database_url),
             tables: Some(tables),
             columns: Some(columns),
             destination: Some(destination),
-            sequences: Some(sequences),
             ..EntryToml::default()
         };
 
@@ -390,13 +364,6 @@ mod tests {
             "trakt_watchlist".into(),
         ];
         let destination = "s3://movie-queue-db-backup".try_into()?;
-        let sequences = hashmap! {
-            "imdb_ratings_id_seq".into() => ("imdb_ratings".into(), "index".into()),
-            "imdb_episodes_id_seq".into() => ("imdb_episodes".into(), "id".into()),
-            "trakt_watched_episodes_id_seq".into() => ("trakt_watched_episodes".into(), "id".into()),
-            "trakt_watched_movies_id_seq".into() => ("trakt_watched_movies".into(), "id".into()),
-            "trakt_watchlist_id_seq".into() => ("trakt_watchlist".into(), "id".into()),
-        };
         let dependencies = hashmap! {
             "imdb_episodes".into() => vec!["imdb_ratings".into()],
             "movie_collection".into() => vec!["imdb_ratings".into()],
@@ -406,7 +373,6 @@ mod tests {
             database_url: Some(database_url),
             tables: Some(tables),
             destination: Some(destination),
-            sequences: Some(sequences),
             dependencies: Some(dependencies),
             ..EntryToml::default()
         };

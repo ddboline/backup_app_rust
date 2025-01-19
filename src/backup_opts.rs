@@ -183,7 +183,6 @@ async fn run_postgres_restore(
     tables: &[StackString],
     columns: &HashMap<StackString, Vec<StackString>>,
     dependencies: &HashMap<StackString, Vec<StackString>>,
-    sequences: &HashMap<StackString, (StackString, StackString)>,
 ) -> Result<(), Error> {
     let full_deps = get_full_deps(tables, columns.keys(), dependencies);
 
@@ -215,8 +214,6 @@ async fn run_postgres_restore(
         }
     })
     .await?;
-
-    restore_sequences(database_url, sequences).await?;
     Ok(())
 }
 
@@ -273,17 +270,9 @@ async fn process_entry(backup_entry: &BackupEntry) -> Result<(), Error> {
                 tables,
                 columns,
                 dependencies,
-                sequences,
             } => {
-                run_postgres_restore(
-                    database_url,
-                    destination,
-                    tables,
-                    columns,
-                    dependencies,
-                    sequences,
-                )
-                .await?;
+                run_postgres_restore(database_url, destination, tables, columns, dependencies)
+                    .await?;
                 println!("Finished postgres_restore {key}");
             }
             Entry::Local {
@@ -504,30 +493,6 @@ async fn backup_table(
         let key = format_sstr!("{table}.sql.gz");
         s3.upload(tempfile.path(), bucket, &key).await?;
     }
-    Ok(())
-}
-
-async fn restore_sequences(
-    database_url: &Url,
-    sequences: &HashMap<StackString, (StackString, StackString)>,
-) -> Result<(), Error> {
-    for (seq, (table, id)) in sequences {
-        let output = Command::new("psql")
-            .args([
-                database_url.as_str(),
-                "-c",
-                &format_sstr!("SELECT setval('{seq}', (SELECT max({id}) FROM {table}), TRUE)"),
-            ])
-            .output()
-            .await?;
-        if !output.stdout.is_empty() {
-            debug!("{}", String::from_utf8_lossy(&output.stdout));
-        }
-        if !output.stderr.is_empty() {
-            error!("{}", String::from_utf8_lossy(&output.stderr));
-        }
-    }
-
     Ok(())
 }
 

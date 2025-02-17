@@ -9,10 +9,11 @@ pub mod s3_instance;
 
 use anyhow::Error;
 use rand::{
-    distributions::{Distribution, Uniform},
-    thread_rng,
+    distr::{Distribution, Uniform},
+    rng as thread_rng,
 };
 use std::{future::Future, time::Duration};
+use std::convert::TryFrom;
 use tokio::time::sleep;
 
 /// # Errors
@@ -23,7 +24,7 @@ where
     F: Future<Output = Result<U, Error>>,
 {
     let mut timeout: f64 = 1.0;
-    let range = Uniform::from(0..1000);
+    let range = Uniform::try_from(0..1000)?;
     loop {
         match f().await {
             Ok(resp) => return Ok(resp),

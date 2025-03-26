@@ -1,10 +1,10 @@
-use anyhow::{format_err, Error};
+use anyhow::{Error, format_err};
 use aws_config::SdkConfig;
 use aws_sdk_s3::{
+    Client as S3Client,
     operation::list_objects::ListObjectsOutput,
     primitives::ByteStream,
     types::{Bucket, Object},
-    Client as S3Client,
 };
 use once_cell::sync::Lazy;
 use parking_lot::{Mutex, MutexGuard};

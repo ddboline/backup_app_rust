@@ -12,8 +12,7 @@ use rand::{
     distr::{Distribution, Uniform},
     rng as thread_rng,
 };
-use std::{future::Future, time::Duration};
-use std::convert::TryFrom;
+use std::{convert::TryFrom, future::Future, time::Duration};
 use tokio::time::sleep;
 
 /// # Errors
@@ -39,7 +38,7 @@ where
     }
 }
 
-use time::{macros::format_description, OffsetDateTime};
+use time::{OffsetDateTime, macros::format_description};
 
 pub(crate) fn current_date_str() -> String {
     match OffsetDateTime::now_utc()

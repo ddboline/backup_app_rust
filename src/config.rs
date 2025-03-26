@@ -1,9 +1,9 @@
-use anyhow::{format_err, Error};
+use anyhow::{Error, format_err};
 use derive_more::{Deref, DerefMut, Into, IntoIterator};
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
-use stack_string::{format_sstr, StackString};
+use stack_string::{StackString, format_sstr};
 use std::{
     borrow::Cow,
     collections::HashMap,

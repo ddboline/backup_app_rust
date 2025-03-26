@@ -1,12 +1,12 @@
-use anyhow::{format_err, Error};
+use anyhow::{Error, format_err};
 use clap::Parser;
 use deadqueue::unlimited::Queue;
 use derive_more::{Deref, Display};
-use flate2::{read::GzDecoder, Compression, GzBuilder};
-use futures::{stream::FuturesUnordered, TryStreamExt};
+use flate2::{Compression, GzBuilder, read::GzDecoder};
+use futures::{TryStreamExt, stream::FuturesUnordered};
 use itertools::Itertools;
 use log::{debug, error};
-use stack_string::{format_sstr, StackString};
+use stack_string::{StackString, format_sstr};
 use std::{
     collections::{BTreeSet, HashMap},
     future::Future,
@@ -21,10 +21,10 @@ use tokio::{
     io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWriteExt, BufReader},
     process::Command,
     sync::{
-        mpsc::{channel, error::TrySendError, Receiver, Sender},
+        mpsc::{Receiver, Sender, channel, error::TrySendError},
         oneshot,
     },
-    task::{spawn, JoinHandle},
+    task::{JoinHandle, spawn},
 };
 use url::Url;
 
@@ -394,8 +394,9 @@ async fn run_local_backup(
     }
 
     if require_sudo {
+        let tmp = format_sstr!("{user}:{user}");
         let output = Command::new("sudo")
-            .args(["chown", &format_sstr!("{user}:{user}"), destination])
+            .args(["chown", &tmp, destination])
             .output()
             .await?;
         if !output.stdout.is_empty() {
@@ -497,12 +498,9 @@ async fn backup_table(
 }
 
 async fn clear_table(database_url: &Url, table: &str) -> Result<(), Error> {
+    let cmd = format_sstr!("DELETE FROM {table}");
     let output = Command::new("psql")
-        .args([
-            database_url.as_str(),
-            "-c",
-            &format_sstr!("DELETE FROM {table}"),
-        ])
+        .args([database_url.as_str(), "-c", &cmd])
         .output()
         .await?;
     if !output.stdout.is_empty() {
@@ -886,7 +884,7 @@ fn topological_sort(
 mod tests {
     use anyhow::Error;
     use maplit::{btreeset, hashmap};
-    use stack_string::{format_sstr, StackString};
+    use stack_string::{StackString, format_sstr};
     use std::{
         collections::{BTreeSet, HashMap},
         sync::Arc,
@@ -894,7 +892,7 @@ mod tests {
     use time::OffsetDateTime;
     use tokio::sync::Mutex;
 
-    use crate::backup_opts::{process_tasks, spawn_threadpool, topological_sort, BackupCommand};
+    use crate::backup_opts::{BackupCommand, process_tasks, spawn_threadpool, topological_sort};
 
     #[test]
     fn test_backupcommand_display() -> Result<(), Error> {

@@ -41,7 +41,7 @@ where
     let (send, recv) = oneshot::channel();
     rayon::spawn(move || {
         if let Err(e) = send.send(f()) {
-            error!("Send error {:?}", e);
+            error!("Send error {e:?}",);
         }
     });
     recv
@@ -823,11 +823,11 @@ where
                     .recv()
                     .await
                     .ok_or_else(|| format_err!("Channel dropped"))?;
-                debug!("recv {} {}", r, table);
+                debug!("recv {r} {table}",);
             }
             node.task.await?;
             for send in node.sends {
-                debug!("send {}", table);
+                debug!("send {table}",);
                 send.send(table.into()).await?;
             }
             Ok(())

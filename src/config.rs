@@ -1,7 +1,7 @@
 use anyhow::{Error, format_err};
 use derive_more::{Deref, DerefMut, Into, IntoIterator};
 use itertools::Itertools;
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use serde::{Deserialize, Serialize};
 use stack_string::{StackString, format_sstr};
 use std::{
@@ -15,7 +15,7 @@ use url::Url;
 
 use crate::current_date_str;
 
-pub static HOME: Lazy<PathBuf> = Lazy::new(|| dirs::home_dir().expect("No Home Directory"));
+pub static HOME: LazyLock<PathBuf> = LazyLock::new(|| dirs::home_dir().expect("No Home Directory"));
 
 #[derive(Debug, PartialEq, IntoIterator, Deref, DerefMut, Eq)]
 pub struct Config(Vec<(StackString, Entry)>);

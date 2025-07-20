@@ -307,7 +307,7 @@ async fn process_entry(backup_entry: &BackupEntry) -> Result<(), Error> {
                 println!("finished clearing");
             }
         }
-    };
+    }
     Ok(())
 }
 

@@ -137,7 +137,9 @@ impl BackupOpts {
             }
         }
 
-        worker_tasks.iter().for_each(|_| queue.push(None));
+        for _ in &worker_tasks {
+            queue.push(None);
+        }
 
         for task in worker_tasks {
             task.await??;

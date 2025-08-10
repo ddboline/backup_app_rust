@@ -1,7 +1,6 @@
 use anyhow::{Error, format_err};
 use derive_more::{Deref, DerefMut, Into, IntoIterator};
 use itertools::Itertools;
-use std::sync::LazyLock;
 use serde::{Deserialize, Serialize};
 use stack_string::{StackString, format_sstr};
 use std::{
@@ -10,6 +9,7 @@ use std::{
     convert::{TryFrom, TryInto},
     fmt, fs,
     path::{Path, PathBuf},
+    sync::LazyLock,
 };
 use url::Url;
 
@@ -253,7 +253,7 @@ struct EntryToml {
 pub struct UrlWrapper(Url);
 
 impl UrlWrapper {
-    fn replace_date(s: &str) -> Cow<str> {
+    fn replace_date(s: &str) -> Cow<'_, str> {
         if s.contains("DATE") {
             s.replace("DATE", &current_date_str()).into()
         } else {
@@ -261,7 +261,7 @@ impl UrlWrapper {
         }
     }
 
-    fn replace_sysid(s: &str) -> Result<Cow<str>, Error> {
+    fn replace_sysid(s: &str) -> Result<Cow<'_, str>, Error> {
         if s.contains("SYSID") {
             let date = current_date_str();
             let sysid: Vec<u8> = std::process::Command::new("uname")

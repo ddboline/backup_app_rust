@@ -876,7 +876,7 @@ fn topological_sort(
     }
     for node in parents_graph.values() {
         if !node.is_empty() {
-            return Err(format_err!("Graph has cycles {:?}", dag));
+            return Err(format_err!("Graph has cycles {dag:?}", ));
         }
     }
     Ok(sorted_elements)

@@ -215,7 +215,7 @@ impl TryFrom<EntryToml> for Entry {
                         if new_p.exists() {
                             Ok(new_p)
                         } else {
-                            Err(format_err!("Path {:?} does not exist", p))
+                            Err(format_err!("Path {} does not exist", p.display()))
                         }
                     }
                 })
